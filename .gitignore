@@ -1,0 +1,12 @@
+# OS
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# 임시/백업 파일
+*.tmp
+*.bak
+~$*
+
+# 대용량·민감 자료 (필요시 해제)
+/private/
