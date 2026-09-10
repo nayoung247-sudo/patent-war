@@ -1,0 +1,15 @@
+{
+  "name": "patent-war",
+  "version": "1.0.0",
+  "description": "The Patent War - KIPI 사내 공모전 시연용 3D 웹 게임 + 랭킹 서버",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

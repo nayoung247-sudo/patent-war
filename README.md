@@ -39,14 +39,36 @@ start index.html
 
 ```
 patent war/
-├─ index.html    ← 게임 전체 (HTML + CSS + JS 단일 파일, 약 2,650줄)
-├─ README.md     ← 이 문서
+├─ public/
+│  └─ index.html  ← 게임 전체 (HTML + CSS + JS 단일 파일)
+├─ server.js       ← 정적 서빙 + 랭킹 API (/api/scores, /api/ranks)
+├─ package.json    ← start 스크립트 + express 의존성
+├─ README.md       ← 이 문서
 └─ .gitignore
 ```
 
-**왜 단일 파일인가**: 로드맵 §2.1에서 배포 형태를 "단일 .html 파일 / 외부 자산 파일 없음"으로 확정했습니다.
+**왜 게임 화면이 단일 파일인가**: 로드맵 §2.1에서 게임 자체의 배포 형태를 "단일 .html 파일 / 외부 자산 파일 없음"으로 확정했습니다.
 파일 하나만 주고받으면 어디서든 실행되고, 경로 문제·CORS·빌드 파이프라인이 전부 사라집니다.
 대신 파일이 길어지므로, 아래처럼 **섹션 주석으로 모듈 경계를 명시**해 두었습니다.
+
+랭킹 화면이 `/api/scores`(점수 등록)와 `/api/ranks`(순위 조회)를 호출하므로, 이 두 API만 제공하는
+가벼운 Express 서버(`server.js`)를 추가했습니다. 순위 데이터는 메모리에만 저장되므로(공모전
+1회성 시연 목적, 별도 DB 없음), Render 무료 플랜에서 15분간 트래픽이 없어 인스턴스가 슬립되면
+재기동 시 랭킹이 초기화됩니다 — 시연 전날 미리 한 번 깨워두는 것을 권장합니다.
+
+### 로컬 실행
+
+```bash
+npm install
+npm start   # http://localhost:3000
+```
+
+### Render 배포
+
+이 저장소(`github.com/nayoung247/patent-war`)가 이미 GitHub에 올라가 있으므로, 새 저장소를
+만들 필요 없이 **이 브랜치를 main에 반영한 뒤** Render Dashboard → New + → Web Service에서
+이 저장소를 그대로 선택해 배포하면 됩니다. Build/Start 명령은 `package.json`의 `start`
+스크립트를 Render가 자동으로 인식합니다.
 
 ---
 

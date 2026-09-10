@@ -3,6 +3,11 @@ Thumbs.db
 desktop.ini
 .DS_Store
 
+# Node
+node_modules/
+npm-debug.log*
+.env
+
 # 임시/백업 파일
 *.tmp
 *.bak
