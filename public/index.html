@@ -4525,7 +4525,9 @@
     A.py+=((M2.y||0)-A.py)*Math.min(1,dt*12);
     //  이번 프레임에 실제로 밀려난 거리가 곧 걸음 속도·방향의 입력이 된다
     A.moveDx=g.position.x-ox; A.moveDz=g.position.z-oz;
-    A.headTgt=M2.ry;
+    //  카메라는 -z 를, 캐릭터 모델은 +z 를 앞으로 본다 (NPC 는 atan2(dx,dz) 로 돈다).
+    //  받은 yaw 를 그대로 쓰면 동료가 늘 등을 보이며 뒷걸음질한다.
+    A.headTgt=M2.ry+Math.PI;
     //  마지막 발사 후 잠깐은 겨눈 자세를 유지하고, 조용해지면 봉을 다시 세운다
     if(A.aimHold>0){ A.aimHold-=dt; if(A.aimHold<=0) A.aiming=false; }
     //  회전·상하 위치·팔다리까지 animEntity 가 한 번에 잡아 준다
@@ -4541,7 +4543,29 @@
   //  탄은 ghost 로 띄워 눈에만 보이게 하고, 아바타는 겨눔 자세 + 반동 + 구슬 발광을 낸다.
   function mateShot(d){
     if(!isCoop() || gameState!=='playing') return;
-    const from=new THREE.Vector3(d.x,d.y,d.z), aim=new THREE.Vector3(d.tx,d.ty,d.tz);
+    const aim=new THREE.Vector3(d.tx,d.ty,d.tz);
+    //  받은 좌표는 동료 '1인칭 화면'의 총구다 — 카메라 오른쪽 아래에 붙은 무기라서
+    //  내 화면의 동료 몸과는 어긋난다. 동료 모델이 든 무기 끝을 출발점으로 쓴다.
+    let from=new THREE.Vector3(d.x,d.y,d.z);
+    const A=NET.mateAnim;
+    if(A){
+      const g=A.group;
+      A.aiming=true; A.aimHold=1.0; A.atkT=.4;   // atkT 는 animEntity 의 반동 킥에 쓰인다
+      const dxz=Math.hypot(d.tx-g.position.x, d.tz-g.position.z);
+      A.aimPitch=Math.max(-.55,Math.min(.55, Math.atan2(d.ty-(A.py+1.35), Math.max(.6,dxz))));
+      if(g.visible){
+        //  NPC 요원 발사와 같은 순서: 몸을 조준점으로 돌리고, 팔과 봉을 겨눈 자세로 맞춘 뒤
+        //  봉 끝 위치를 읽는다. 안 그러면 첫 발이 세워 둔 봉 끝(머리 위)에서 나간다.
+        g.rotation.y=Math.atan2(d.tx-g.position.x, d.tz-g.position.z);
+        const L=g.userData.limbs, W=g.userData.wand;
+        if(L && L.armR) L.armR.rotation.set(AIM_X-A.aimPitch,0,0);
+        if(W) W.rotation.x=Math.PI/2;
+        g.updateMatrixWorld(true);
+        const mz=g.userData.muzzle;
+        if(mz) from=mz.getWorldPosition(new THREE.Vector3());
+      }
+      const mf=g.userData.mflash; if(mf) mf.material.opacity=1;
+    }
     if(d.p){                                   // 공격력 강화 중이면 3발 산탄도 그대로
       const dir=aim.clone().sub(from), len=dir.length()||1;
       const side=new THREE.Vector3(-dir.z,0,dir.x).normalize().multiplyScalar(len*.055);
@@ -4552,13 +4576,6 @@
       fire(from, aim, 'blue','mate', null, {ghost:true});
     }
     SFX.shotAt(from);
-    const A=NET.mateAnim;
-    if(A){
-      A.aiming=true; A.aimHold=1.0; A.atkT=.4;   // atkT 는 animEntity 의 반동 킥에 쓰인다
-      const dxz=Math.hypot(d.tx-d.x, d.tz-d.z);
-      A.aimPitch=Math.max(-.55,Math.min(.55, Math.atan2(d.ty-(A.py+1.35), Math.max(.6,dxz))));
-      const mf=A.group.userData.mflash; if(mf) mf.material.opacity=1;
-    }
   }
 
   // ═════════ 상태 송신 ═════════
