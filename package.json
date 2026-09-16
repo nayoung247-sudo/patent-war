@@ -1,15 +1,9 @@
 {
-  "name": "patent-war",
-  "version": "1.0.0",
-  "description": "The Patent War - KIPI 사내 공모전 시연용 3D 웹 게임 + 랭킹 서버",
-  "private": true,
-  "scripts": {
-    "start": "node server.js"
-  },
-  "engines": {
-    "node": ">=18.0.0"
-  },
-  "dependencies": {
-    "express": "^4.19.2"
-  }
+  "name": "patentwar-server",
+  "version": "2.0.0",
+  "description": "The Patent War — 게임 서빙 + 랭킹 API + 2인 협동 릴레이",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" },
+  "dependencies": { "express": "^4.19.2", "ws": "^8.18.0" }
 }
