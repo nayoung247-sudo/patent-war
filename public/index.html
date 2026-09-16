@@ -551,6 +551,15 @@
   .seat .s-role { font-size:12px; font-weight:700; letter-spacing:.06em; color:var(--muted); }
   .seat .s-name { font-size:21px; font-weight:900; color:var(--text); margin-top:8px; }
   .seat .s-char { color:var(--muted); }
+  /*  대기실 좌석의 캐릭터 얼굴 — 캐릭터 선택 카드와 같은 3D 초상을 재사용한다.
+      빈 자리는 물음표만 떠 있는 빈 판으로 둔다. */
+  .seat .s-face { width:104px; height:132px; margin:12px auto 2px; border-radius:8px; overflow:hidden;
+    background:rgba(255,255,255,.05); border:1px solid var(--line);
+    display:flex; align-items:center; justify-content:center; }
+  .seat .s-face::after { content:'?'; font-size:30px; font-weight:900; color:var(--muted); }
+  .seat .s-face.on::after { content:none; }
+  .seat .s-face img { width:100%; height:100%; object-fit:cover; display:none; }
+  .seat .s-face.on img { display:block; }
   .seat-vs { font-size:22px; font-weight:900; color:var(--accent); }
   .ob-card { background:linear-gradient(180deg,#161e38,#0f152a); border:1px solid var(--line); border-radius:8px; padding:26px 32px; }
   .ob-title { font-size:26px; font-weight:900; letter-spacing:-.01em; color:var(--text); }
@@ -954,9 +963,9 @@
   <div class="sel-wrap">
     <div class="kicker">합동 작전</div><div class="sel-title"><span id="roomNo">1</span>번 방</div>
     <div class="roomseats">
-      <div class="seat" id="seat0"><div class="s-role">방장</div><div class="s-name">-</div><div class="s-char">-</div></div>
+      <div class="seat" id="seat0"><div class="s-role">방장</div><div class="s-face"><img alt=""></div><div class="s-name">-</div><div class="s-char">-</div></div>
       <div class="seat-vs">+</div>
-      <div class="seat" id="seat1"><div class="s-role">참가자</div><div class="s-name">비어 있음</div><div class="s-char">-</div></div>
+      <div class="seat" id="seat1"><div class="s-role">참가자</div><div class="s-face"><img alt=""></div><div class="s-name">비어 있음</div><div class="s-char">-</div></div>
     </div>
     <div class="sel-foot">
       <div class="pick-msg" id="roomMsg">동료를 기다리는 중…</div>
@@ -3314,6 +3323,10 @@
       // 산탄(공격력 강화) — 더 두껍게
       shotPower(){ tone({type:'sawtooth', f0:700, f1:180, dur:.18, vol:.2, filter:'lowpass', fc:2200});
                    tone({type:'square',   f0:1200,f1:320, dur:.12, vol:.12}); },
+      // 동료 발사 — 같은 음색이되 거리로 줄인다 (내 총성과 섞이지 않게)
+      shotAt(pos){ const v=distVol(pos,.15); if(v<=0) return;
+                   tone({type:'square', f0:880, f1:220, dur:.13, vol:v, filter:'lowpass', fc:2600});
+                   tone({type:'sine',   f0:1500,f1:500, dur:.09, vol:v*.6}); },
       // 명중
       hit(pos){ tone({type:'triangle', f0:420, f1:180, dur:.07, vol:distVol(pos,.18)}); },
       // 약점 명중 — 높고 맑은 띵
@@ -4463,12 +4476,19 @@
     const me={name:playerName, char:LOADOUTS[charIdx].name};
     const host=NET.isHost? me : NET.peer;
     const guest=NET.isHost? NET.peer : me;
+    if(!PORTRAITS) PORTRAITS=makePortraits();   // 캐릭터 선택을 건너뛰고 들어온 경우 대비
     const fill=(id,p,role)=>{
       const el=$(id);
       el.querySelector('.s-role').textContent=role;
       el.querySelector('.s-name').textContent=p? p.name : '비어 있음';
       el.querySelector('.s-char').textContent=p? p.char : '-';
       el.classList.toggle('on', !!p);
+      //  상대가 고른 캐릭터는 이름 문자열로만 오므로 LOADOUTS 에서 되찾는다
+      const face=el.querySelector('.s-face'), img=face.querySelector('img');
+      const idx=p? LOADOUTS.findIndex(L=>L.name===p.char) : -1;
+      const url=(idx>=0 && PORTRAITS)? PORTRAITS[idx] : null;
+      if(url){ img.src=url; img.alt=p.char; face.classList.add('on'); }
+      else { img.removeAttribute('src'); img.alt=''; face.classList.remove('on'); }
     };
     fill('seat0', host, '방장');
     fill('seat1', guest, '참가자');
@@ -4496,7 +4516,7 @@
     if(!A || A.group!==g){
       A=NET.mateAnim={group:g, py:g.position.y, phase:Math.random()*6, isAgent:true,
                       walkPh:0, moveDx:0, moveDz:0, moveHold:0, aF:0, aS:0, aSpd:0,
-                      headTgt:g.rotation.y, aiming:false, aimPitch:0, atkT:0};
+                      headTgt:g.rotation.y, aiming:false, aimPitch:0, atkT:0, aimHold:0};
     }
     //  받은 좌표로 부드럽게 따라가게 보간한다 (초당 15회 수신)
     const ox=g.position.x, oz=g.position.z;
@@ -4506,6 +4526,8 @@
     //  이번 프레임에 실제로 밀려난 거리가 곧 걸음 속도·방향의 입력이 된다
     A.moveDx=g.position.x-ox; A.moveDz=g.position.z-oz;
     A.headTgt=M2.ry;
+    //  마지막 발사 후 잠깐은 겨눈 자세를 유지하고, 조용해지면 봉을 다시 세운다
+    if(A.aimHold>0){ A.aimHold-=dt; if(A.aimHold<=0) A.aiming=false; }
     //  회전·상하 위치·팔다리까지 animEntity 가 한 번에 잡아 준다
     if(M2.alive) animEntity(A, dt, false);
     const box=$('mateBox');
@@ -4513,6 +4535,30 @@
     box.classList.toggle('down', !M2.alive);
     $('mateName').textContent=(NET.peer.name||'동료')+(M2.alive?'':' — 쓰러짐');
     $('mateFill').style.width=Math.max(0,M2.hp/(M2.maxHp||150)*100)+'%';
+  }
+
+  //  동료가 쏜 것을 내 화면에 그대로 재현한다.
+  //  탄은 ghost 로 띄워 눈에만 보이게 하고, 아바타는 겨눔 자세 + 반동 + 구슬 발광을 낸다.
+  function mateShot(d){
+    if(!isCoop() || gameState!=='playing') return;
+    const from=new THREE.Vector3(d.x,d.y,d.z), aim=new THREE.Vector3(d.tx,d.ty,d.tz);
+    if(d.p){                                   // 공격력 강화 중이면 3발 산탄도 그대로
+      const dir=aim.clone().sub(from), len=dir.length()||1;
+      const side=new THREE.Vector3(-dir.z,0,dir.x).normalize().multiplyScalar(len*.055);
+      fire(from, aim.clone(),           'blue','mate', null, {ghost:true});
+      fire(from, aim.clone().add(side), 'blue','mate', null, {ghost:true});
+      fire(from, aim.clone().sub(side), 'blue','mate', null, {ghost:true});
+    } else {
+      fire(from, aim, 'blue','mate', null, {ghost:true});
+    }
+    SFX.shotAt(from);
+    const A=NET.mateAnim;
+    if(A){
+      A.aiming=true; A.aimHold=1.0; A.atkT=.4;   // atkT 는 animEntity 의 반동 킥에 쓰인다
+      const dxz=Math.hypot(d.tx-d.x, d.tz-d.z);
+      A.aimPitch=Math.max(-.55,Math.min(.55, Math.atan2(d.ty-(A.py+1.35), Math.max(.6,dxz))));
+      const mf=A.group.userData.mflash; if(mf) mf.material.opacity=1;
+    }
   }
 
   // ═════════ 상태 송신 ═════════
@@ -4560,6 +4606,7 @@
       if(!NET.isHost) ghostHit(mateEnts.get(d.id));
       return;
     }
+    if(d.k==='shot'){ mateShot(d); return; }              // 동료의 발사
     if(d.k==='dmg'){                                      // 호스트: 동료의 피해 보고
       if(!NET.isHost) return;
       const e=entities.find(x=>x.netId===d.id);
@@ -5061,6 +5108,10 @@
     pFlash.material.opacity=1;                  // 구슬 발광
     $('xh').classList.add('kick'); setTimeout(()=>$('xh').classList.remove('kick'),100);
     recoil=1;
+    //  동료 화면에도 같은 탄이 날아가도록 총구 위치와 조준점을 그대로 넘긴다
+    if(isCoop()) relay({k:'shot', x:+from.x.toFixed(2), y:+from.y.toFixed(2), z:+from.z.toFixed(2),
+                        tx:+aim.x.toFixed(2), ty:+aim.y.toFixed(2), tz:+aim.z.toFixed(2),
+                        p:powerT>0?1:0});
   }
   cvs.addEventListener('mousedown',e=>{
     //  잠금이 풀려 있으면 같이 걸어 주되, 클릭을 삼키지는 않는다 — 누르면 무조건 나간다.
@@ -6763,7 +6814,10 @@
       }
       b.mesh.position.addScaledVector(b.dir,step); b.gone+=step;
       if(b.gone>=b.dist){
-        if(b.maxed) boom(b.mesh.position,b.team,true);
+        //  동료 탄(ghost)은 눈으로만 보이는 탄이다. 여기서 burst 를 부르면
+        //  쏜 쪽이 이미 보고한 피해에 더해 두 번 들어간다.
+        if(b.opt&&b.opt.ghost) boom(b.mesh.position,b.team,true);
+        else if(b.maxed) boom(b.mesh.position,b.team,true);
         else burst(b.mesh.position,b.team,b.attacker,b.src,b.opt);
         scene.remove(b.mesh); bolts.splice(i,1);
       }
