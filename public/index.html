@@ -3860,6 +3860,22 @@
     $('upL').innerHTML='강화까지 발명이 <b>'+(LEVEL_KILLS-upCnt)+'</b>마리';
     box.classList.toggle('near', p>=.7);
   }
+  //  무기 강화 — 방장(싱글)은 직접 처치로, 참여자는 방장이 보낸 값으로 들어온다
+  function onWeaponLevelUp(lv){
+    wlv=lv; if(wlv>stat.maxWlv) stat.maxWlv=wlv;
+    SFX.levelup();
+    $('wlv').textContent='Lv.'+wlv;
+    battleLog(nameSpan(ME)+'의 마법총이 <span class="hl">Lv.'+wlv+'</span> 로 강화되었습니다!','wave');
+    updateUpgradeHUD(true);
+  }
+  //  참여자: 방장이 보낸 강화 진행도·레벨에 맞춘다. 값이 바뀐 경우에만 갱신해 강화 연출을 끊지 않는다.
+  function syncUpgrade(uc, lv){
+    if(uc==null || lv==null) return;                      // 예전 버전 방장 — 진행도를 보내지 않음
+    if(lv>wlv){ upCnt=uc; onWeaponLevelUp(lv); return; }
+    if(uc===upCnt && lv===wlv) return;
+    upCnt=uc; wlv=lv; $('wlv').textContent='Lv.'+wlv;
+    updateUpgradeHUD();
+  }
   const NPC_BASE_HP = 34;
   const NPC_WAVE_HP = 16;    // 웨이브마다 붙는 추가 체력
   const INV_MAX     = 4;
@@ -4051,19 +4067,16 @@
         const logHtml=who+' 이(가) <span class="npc">'+e.name+'</span> 처치 <span class="hl">+'+got.toLocaleString()+'</span>'
                   +(mine&&comboN>=2? ' <span class="streak">'+comboN+'연속 ×'+comboMul.toFixed(1)+'</span>':'');
         battleLog(logHtml, 'kill');
-        if(isCoop() && NET.isHost){
-          //  처치 확정을 동료에게 알린다 (동료 입장에서 by 가 뒤집힌다)
-          relay({k:'kill', id:e.netId, by: mine? 'host':'mate', b:e.isBoss?1:0, sc:score, log:logHtml});
-        }
         waveKills++; updateQuotaHUD();
+        //  강화 링은 팀 공용 — 누가 잡든 함께 차오른다
         upCnt++;
-        if(upCnt>=LEVEL_KILLS){
-          upCnt=0; wlv++; if(wlv>stat.maxWlv) stat.maxWlv=wlv;
-          SFX.levelup();
-          $('wlv').textContent='Lv.'+wlv;
-          battleLog(nameSpan(ME)+'의 마법총이 <span class="hl">Lv.'+wlv+'</span> 로 강화되었습니다!','wave');
-          updateUpgradeHUD(true);
-        } else updateUpgradeHUD();
+        if(upCnt>=LEVEL_KILLS){ upCnt=0; onWeaponLevelUp(wlv+1); }
+        else updateUpgradeHUD();
+        if(isCoop() && NET.isHost){
+          //  처치 확정을 동료에게 알린다 (동료 입장에서 by 가 뒤집힌다).
+          //  강화 진행도(uc)와 레벨(lv)도 함께 보내 동료의 링이 같은 순간에 차오르게 한다.
+          relay({k:'kill', id:e.netId, by: mine? 'host':'mate', b:e.isBoss?1:0, sc:score, log:logHtml, uc:upCnt, lv:wlv});
+        }
       }
       if(e.isBoss){ updateBossBar(); }
       updateQuotaHUD();
@@ -4845,7 +4858,7 @@
                  e.variant||'normal', e.isBoss?1:0, e.alive?1:0, e.skinId||0, +(e.sizeMul||1).toFixed(2),
                  e.bossKey||'']);
     }
-    relay({k:'w', e:ents, wv:wave, wk:waveKills, tl:timeLeft, sc:score, lv:wlv});
+    relay({k:'w', e:ents, wv:wave, wk:waveKills, tl:timeLeft, sc:score, lv:wlv, uc:upCnt});
   }
 
   // ═════════ 상태 수신 ═════════
@@ -4929,6 +4942,7 @@
       if(d.by==='mate'){ SFX.kill(); hitmark(true); bumpCombo(); stat.kills++; if(d.b) stat.bosses++; else stat.inventors++; }
       score=d.sc; $('scoreN').textContent=score.toLocaleString();
       battleLog(d.log, 'kill');
+      syncUpgrade(d.uc, d.lv);                            // 강화 링을 방장과 같은 순간에 채운다
       return;
     }
     if(d.k==='wave'){                                     // 게스트: 웨이브 전환
@@ -4984,9 +4998,11 @@
   //  게스트: 호스트가 보낸 몬스터 목록대로 씬을 맞춘다
   function applyWorld(d){
     if(NET.isHost) return;
-    wave=d.wv; waveKills=d.wk; timeLeft=d.tl; score=d.sc; wlv=d.lv;
+    wave=d.wv; waveKills=d.wk; timeLeft=d.tl; score=d.sc;
     $('scoreN').textContent=score.toLocaleString();
-    $('wlv').textContent='Lv.'+wlv;
+    //  강화 진행도 — 처치 알림을 놓쳤어도 주기 동기화로 맞춘다
+    if(d.uc!=null) syncUpgrade(d.uc, d.lv);
+    else { wlv=d.lv; $('wlv').textContent='Lv.'+wlv; }
     updateQuotaHUD();
     const seen=new Set();
     for(const a of d.e){
