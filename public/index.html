@@ -1346,7 +1346,7 @@
   //  동서남북 랜드마크 4채 — 실제 건물 사진을 게임 무드(로우폴리 박스 + 도트 질감)로 옮긴 배경
   //   · 플레이 구역(±28m) 훨씬 바깥(88m)에 서 있는 순수 배경이다. 충돌 판정·그림자 없음.
   //   · 창문은 캔버스로 그린 도트 텍스처라 박스 수가 적다 (건물당 10개 안팎).
-  //   · 밤 테마에서는 창문 불빛이 켜진다 — applyTheme() 가 landmarkLit 의 발광 세기를 바꾼다.
+  //   · 해가 지면 창문 불빛이 켜진다 — applyDaylight() 가 landmarkLit 의 발광 세기를 바꾼다.
   //   · 정면(+z)이 맵 중앙을 보도록 회전해서 배치한다.
   // ═══════════════════════════════════════════════════════════════════════════
   const landmarkLit=[];                                  // 밤에 켜지는 창문 재질들
@@ -2442,29 +2442,36 @@
   const fillLight=new THREE.DirectionalLight(0xbcd2ff,.3);
   fillLight.position.set(-34,26,-22); scene.add(fillLight);
 
-  // ── 맵 테마 3종: 맵 구조는 그대로, 하늘·안개·조명만 바뀐다. 매치 시작 시 무작위 ──
-  const THEMES=[
-    {key:'morning', name:'맑은 아침',
-     sky:0x8fc9f2, fog:[0xb7dcf5, 34, 130], haze:.30,
-     hemi:[0xeaf4ff, 0x8a9a7a, 1.15], sun:[0xfff7e6, 1.25, [30,60,35]], fill:[0xcfe3ff,.35], lamps:false},
-    {key:'sunset',  name:'노을',
-     sky:0xc9995c, fog:[0xcfa66b, 30, 120], haze:.42,
-     hemi:[0xfff1d6, 0x9a6b40, 1.05], sun:[0xffe9c4, 1.10, [40,55,20]], fill:[0xbcd2ff,.30], lamps:false},
-    {key:'night',   name:'밤',
-     sky:0x0b1226, fog:[0x0e1730, 22, 95], haze:.50,
-     hemi:[0x6f86c9, 0x14101f, .70], sun:[0xb9c8ff, .55, [-30,50,-20]], fill:[0x3d4f8a,.25], lamps:true}
+  // ── 하루의 흐름: 한 판(3분) 동안 낮 → 노을 → 밤으로 서서히 바뀐다 ──
+  //   맵 구조는 그대로, 하늘·안개·조명·구름·가로등만 판 진행률 t(0~1)에 맞춰 보간한다.
+  //   t≈.94 에 완전한 밤이 되고, 시간이 끝나면 밤인 채로 판이 끝난다.
+  const DAY_KEYS=[
+    {t:.00, sky:0x8fc9f2, fog:[0xb7dcf5,34,130], haze:.30, hemi:[0xeaf4ff,0x8a9a7a,1.15], sun:[0xfff7e6,1.25], fill:[0xcfe3ff,.35],
+     pos:[30,60,35],   cloud:[0xffffff,.78], lamp:0,   stars:0,   sunD:1, moonD:0},
+    {t:.20, sky:0x9ac8ea, fog:[0xc3dcef,34,128], haze:.31, hemi:[0xf2f2ff,0x8e9676,1.12], sun:[0xfff1d8,1.22], fill:[0xcfdcff,.34],
+     pos:[40,52,26],   cloud:[0xfffaf0,.76], lamp:0,   stars:0,   sunD:1, moonD:0},
+    {t:.50, sky:0xd9a062, fog:[0xd9a86e,31,122], haze:.40, hemi:[0xffe6c4,0x9a6b40,1.05], sun:[0xffc486,1.10], fill:[0xbcc8ff,.30],
+     pos:[58,28,12],   cloud:[0xffd2a8,.66], lamp:0,   stars:0,   sunD:1, moonD:0},
+    {t:.64, sky:0xc9764e, fog:[0xc98660,29,116], haze:.44, hemi:[0xffcfae,0x86573a,.95],  sun:[0xff9a58,.90],  fill:[0xa9aee8,.28],
+     pos:[64,16,6],    cloud:[0xffb48c,.58], lamp:.25, stars:0,   sunD:1, moonD:.1},
+    {t:.80, sky:0x3f3a66, fog:[0x45436c,25,106], haze:.47, hemi:[0x9690c6,0x2e2434,.82],  sun:[0xc9a8d8,.45],  fill:[0x55609a,.26],
+     pos:[-8,42,-28],  cloud:[0x8c7fa8,.42], lamp:.8,  stars:.45, sunD:0, moonD:.7},
+    {t:.94, sky:0x0b1226, fog:[0x0e1730,22,95],  haze:.50, hemi:[0x6f86c9,0x14101f,.70],  sun:[0xb9c8ff,.55],  fill:[0x3d4f8a,.25],
+     pos:[-30,50,-20], cloud:[0x56648a,.28], lamp:1,   stars:1,   sunD:0, moonD:1},
+    {t:1.0, sky:0x0b1226, fog:[0x0e1730,22,95],  haze:.50, hemi:[0x6f86c9,0x14101f,.70],  sun:[0xb9c8ff,.55],  fill:[0x3d4f8a,.25],
+     pos:[-30,50,-20], cloud:[0x56648a,.28], lamp:1,   stars:1,   sunD:0, moonD:1}
   ];
-  let themeIdx=1;
-  //  밤 전용 가로등 — 시야 보정용. 아침·노을에는 꺼진다.
+  //  가로등 — 시야 보정용. 해가 지면서 서서히 켜진다.
   const lampGroup=new THREE.Group(); scene.add(lampGroup);
+  const lampGlows=[], lampLights=[];
   [[-16,-12],[16,-12],[-16,14],[16,14],[0,-22],[0,22],[-24,0],[24,0]].forEach(([x,z])=>{
     const pole=new THREE.Mesh(new THREE.CylinderGeometry(.09,.12,4.4,8), M(0x2a2e38));
     pole.position.set(x,2.2,z); lampGroup.add(pole);
     const head=new THREE.Mesh(new THREE.SphereGeometry(.28,10,8),
       new THREE.MeshBasicMaterial({color:0xffd9a0}));
     head.position.set(x,4.5,z); lampGroup.add(head);
-    const glow=mkGlow(0xffc070,3.2); glow.position.set(x,4.5,z); lampGroup.add(glow);
-    const pl=new THREE.PointLight(0xffc080,1.4,22,1.6); pl.position.set(x,4.3,z); if(!PERF.soft || (x===0)) lampGroup.add(pl);
+    const glow=mkGlow(0xffc070,3.2); glow.position.set(x,4.5,z); lampGroup.add(glow); lampGlows.push(glow);
+    const pl=new THREE.PointLight(0xffc080,1.4,22,1.6); pl.position.set(x,4.3,z); if(!PERF.soft || (x===0)){ lampGroup.add(pl); lampLights.push(pl); }
   });
   bakeParts(lampGroup);
   //  ── 구름 — 멀리 하늘에 옅게 떠 있는 판 몇 장(스프라이트 11장, 텍스처 3장). 아주 천천히 흐른다 ──
@@ -2492,24 +2499,91 @@
       cloudGroup.add(sp); cloudMats.push(m);
     }
   })();
-  const CLOUD_LOOK={morning:[0xffffff,.78], sunset:[0xffd6b0,.62], night:[0x56648a,.28]};
-  function applyTheme(i){
-    const T=THEMES[i]; themeIdx=i;
-    { const c=CLOUD_LOOK[T.key]||CLOUD_LOOK.morning; cloudMats.forEach(m=>{ m.color.setHex(c[0]); m.opacity=c[1]; }); }
-    scene.background.setHex(T.sky);
-    scene.fog.color.setHex(T.fog[0]); scene.fog.near=T.fog[1]; scene.fog.far=T.fog[2];
-    hemiLight.color.setHex(T.hemi[0]); hemiLight.groundColor.setHex(T.hemi[1]); hemiLight.intensity=T.hemi[2];
-    moonLight.color.setHex(T.sun[0]); moonLight.intensity=T.sun[1]; moonLight.position.set(...T.sun[2]);
-    fillLight.color.setHex(T.fill[0]); fillLight.intensity=T.fill[1];
-    lampGroup.visible=T.lamps;
-    landmarkLit.forEach(m=>{ m.emissiveIntensity=T.lamps? .95 : 0; });   // 랜드마크 창문 불빛
-    hazeLandmarks(T.fog[0], T.haze);                                          // 랜드마크 대기색
+  //  ── 해 · 달 · 별 — 카메라를 따라다니는 먼 하늘 장식 (안개 영향 없음) ──
+  const SKY_R=250;
+  const sunDisc=mkGlow(0xfff2d0,70);  sunDisc.material.fog=false;  scene.add(sunDisc);
+  const moonDisc=mkGlow(0xdfe8ff,26); moonDisc.material.fog=false; scene.add(moonDisc);
+  const stars=(function(){
+    const R=pxRand(4242), n=PERF.soft? 180 : 360, pos=new Float32Array(n*3);
+    for(let i=0;i<n;i++){
+      const a=R()*Math.PI*2, y=.08+R()*.92, r=Math.sqrt(1-y*y);          // 위쪽 반구에 고르게
+      pos[i*3]=Math.cos(a)*r*SKY_R; pos[i*3+1]=y*SKY_R; pos[i*3+2]=Math.sin(a)*r*SKY_R;
+    }
+    const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(pos,3));
+    const p=new THREE.Points(g,new THREE.PointsMaterial({color:0xe6ecff,size:1.6,sizeAttenuation:false,transparent:true,opacity:0,depthWrite:false,fog:false}));
+    p.frustumCulled=false; scene.add(p); return p;
+  })();
+  //  해는 서쪽(+x) 지평선으로 기울어 t≈.72 에 진다. 달은 노을 무렵 반대편에서 떠오른다.
+  const sunDir=new THREE.Vector3(), moonDir=new THREE.Vector3();
+  const dirFrom=(v,elDeg,az)=>{ const el=elDeg*Math.PI/180; return v.set(Math.cos(el)*Math.cos(az), Math.sin(el), Math.cos(el)*Math.sin(az)); };
+  const _ca=new THREE.Color(), _cb=new THREE.Color(), _cc=new THREE.Color();
+  const lerpN=(a,b,k)=>a+(b-a)*k;
+  const lerpHex=(target,a,b,k)=>target.copy(_ca.setHex(a)).lerp(_cb.setHex(b),k);
+  const clamp01=v=>Math.max(0,Math.min(1,v));
+  let dayT=0, dayApplied=-1, lampWarm=false;
+  function applyDaylight(t, force){
+    t=clamp01(t);
+    if(!force && Math.abs(t-dayApplied)<.0012) return;           // 약 0.2초마다 한 번만 갱신
+    dayApplied=t;
+    let i=0; while(i<DAY_KEYS.length-2 && t>DAY_KEYS[i+1].t) i++;
+    const A=DAY_KEYS[i], B=DAY_KEYS[i+1], u=clamp01((t-A.t)/(B.t-A.t)), k=u*u*(3-2*u);
+    lerpHex(scene.background,A.sky,B.sky,k);
+    lerpHex(scene.fog.color,A.fog[0],B.fog[0],k);
+    scene.fog.near=lerpN(A.fog[1],B.fog[1],k); scene.fog.far=lerpN(A.fog[2],B.fog[2],k);
+    lerpHex(hemiLight.color,A.hemi[0],B.hemi[0],k); lerpHex(hemiLight.groundColor,A.hemi[1],B.hemi[1],k);
+    hemiLight.intensity=lerpN(A.hemi[2],B.hemi[2],k);
+    lerpHex(moonLight.color,A.sun[0],B.sun[0],k); moonLight.intensity=lerpN(A.sun[1],B.sun[1],k);
+    moonLight.position.set(lerpN(A.pos[0],B.pos[0],k), lerpN(A.pos[1],B.pos[1],k), lerpN(A.pos[2],B.pos[2],k))
+      .normalize().multiplyScalar(72);                              // 해가 기울수록 그림자가 길어진다
+    lerpHex(fillLight.color,A.fill[0],B.fill[0],k); fillLight.intensity=lerpN(A.fill[1],B.fill[1],k);
+    lerpHex(_cc,A.cloud[0],B.cloud[0],k);
+    { const op=lerpN(A.cloud[1],B.cloud[1],k); cloudMats.forEach(m=>{ m.color.copy(_cc); m.opacity=op; }); }
+    //  가로등 · 랜드마크 창문 불빛 — 해가 지면서 서서히 켜진다
+    const L=lerpN(A.lamp,B.lamp,k);
+    lampGroup.visible=L>.01;
+    lampGlows.forEach(s=>{ s.material.opacity=L; });
+    lampLights.forEach(p=>{ p.intensity=1.4*L; });
+    landmarkLit.forEach(m=>{ m.emissiveIntensity=.95*L; });
+    //  해 · 달 · 별 — 지평선 아래로 내려가면 사라진다
+    dirFrom(sunDir, 62-t/.72*60, .95-t*.9);
+    sunDisc.material.opacity=lerpN(A.sunD,B.sunD,k)*clamp01(sunDir.y*8+.3);
+    lerpHex(sunDisc.material.color,0xfff2d0,0xff7a38,clamp01(t/.66));        // 낮의 흰 해 → 붉은 석양
+    sunDisc.visible=sunDisc.material.opacity>.01;
+    dirFrom(moonDir, -6+clamp01((t-.6)/.4)*48, Math.PI+.55);
+    moonDisc.material.opacity=lerpN(A.moonD,B.moonD,k)*clamp01(moonDir.y*8+.3);
+    moonDisc.visible=moonDisc.material.opacity>.01;
+    stars.material.opacity=lerpN(A.stars,B.stars,k)*.9;
+    stars.visible=stars.material.opacity>.01;
+    lerpHex(_cc,A.fog[0],B.fog[0],k);
+    hazeLandmarks(_cc.getHex(), lerpN(A.haze,B.haze,k));                        // 랜드마크 대기색
   }
-  function randomTheme(){
-    //  직전 판과 같은 테마는 피한다
-    let i; do{ i=(Math.random()*THEMES.length)|0; }while(i===themeIdx && THEMES.length>1);
-    applyTheme(i);
+  //  하늘 장식은 카메라를 따라다녀 무한히 먼 것처럼 보이게 한다 (매 프레임)
+  function followSky(){
+    const c=camera.position;
+    sunDisc.position.copy(sunDir).multiplyScalar(SKY_R).add(c);
+    moonDisc.position.copy(moonDir).multiplyScalar(SKY_R).add(c);
+    stars.position.copy(c);
   }
+  //  가로등이 켜지는 순간 조명 수가 바뀌며 셰이더를 다시 만드느라 끊기지 않도록,
+  //  켠 상태의 셰이더를 판 시작 전에 한 번 미리 만들어 둔다
+  function warmLampShaders(){
+    if(lampWarm) return; lampWarm=true;
+    const v=lampGroup.visible; lampGroup.visible=true;
+    try{ renderer.compile(scene,camera); }catch(e){}
+    lampGroup.visible=v;
+  }
+  function resetDaylight(){ dayT=0; applyDaylight(0,true); }
+  //  판 진행률 — 호스트/싱글은 1초 미만 누적값까지 더해 매끄럽게, 게스트는 받은 초를 부드럽게 따라간다
+  function tickDaylight(dt){
+    if(dayHold!=null) return;
+    const target=clamp01((MATCH_TIME-timeLeft+(isGuest()? 0 : timeAcc))/MATCH_TIME);
+    dayT= isGuest()? dayT+(target-dayT)*Math.min(1,dt*1.5) : target;
+    applyDaylight(dayT);
+  }
+  applyDaylight(0,true);
+  //  점검용 — __day(.7) 은 그 시각으로 고정, __day(null) 은 고정 해제, __day() 는 현재 진행률
+  let dayHold=null;
+  window.__day=function(t){ if(arguments.length){ dayHold=t; if(t!=null){ dayT=t; applyDaylight(t,true); } } return +dayT.toFixed(3); };
 
   // ═════════ 아이템: 완전 무작위 배치 + 재생성 시 위치 변경 ═════════
   // 고정 배치를 폐기하고 매번 빈 지면 위 임의 지점에 스폰한다.
@@ -4231,6 +4305,7 @@
     hand.visible=true;
     score=0; wave=1; waveKills=0; upCnt=0; wlv=1;
     timeLeft=MATCH_TIME; timeAcc=0; spawnAcc=0; spawnCursor=0; spawnCool.clear();
+    resetDaylight();
     resetCombo();
     bossQueue.length=0; clearBonus=0; matchCleared=false;
     for(const k in stat) stat[k]=0;
@@ -4276,8 +4351,8 @@
     clearInterval(cdTimer); cdTimer=null;
     BGM.stop();
     requestLock();
-    if(isCoop() && NET.isHost){ randomTheme(); relay({k:'theme', i:themeIdx}); }
-    else if(!isCoop()) randomTheme();
+    //  하늘은 판 진행률로 정해지므로 협동에서도 따로 맞출 필요가 없다 — 모두 낮에서 시작
+    warmLampShaders();
     applyLoadout(charIdx);
     { const img=$('hpFaceImg'), url=hudFace(LOADOUTS[charIdx].model); if(url) img.src=url; $('hpFace').classList.toggle('hidden', !url); }
     resetMatch();
@@ -4825,7 +4900,7 @@
       return;
     }
     if(d.k==='hurt'){ takeHit(d.v||null, null); return; }
-    if(d.k==='theme'){ if(!NET.isHost) applyTheme(d.i); return; }
+    if(d.k==='theme') return;                     // 예전 버전 호환 — 하늘은 이제 남은 시간으로 정해진다
     if(d.k==='end'){
       if(!NET.isHost){
         clearBonus=d.bonus||0;
@@ -6831,6 +6906,8 @@
   function step(dt){
     t+=dt;
     cloudGroup.rotation.y+=dt*.0035;                   // 구름이 아주 천천히 흐른다
+    if(gameState==='playing') tickDaylight(dt);         // 낮 → 노을 → 밤
+    followSky();
 
     // 시점 — ESC 메뉴가 열려 있으면 갱신하지 않는다.
     // (게임 자체는 계속 돌아가지만, 커서로 버튼을 누르는 동안 화면이 따라 돌면 안 되므로)
