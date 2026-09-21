@@ -58,11 +58,19 @@
 
   /* 대장급 체력바 */
   .bossbar { position:absolute; top:104px; left:50%; transform:translateX(-50%); width:min(560px,66vw);
+    display:flex; flex-direction:column; gap:8px;
     filter:drop-shadow(0 2px 10px rgba(0,0,0,.75)); }
-  .bossbar .bb-name { text-align:center; font-size:13px; font-weight:800; letter-spacing:4px; color:#ff9d9d; margin-bottom:4px; }
+  .bossbar .bb-name { display:flex; align-items:center; justify-content:center; gap:7px;
+    font-size:13px; font-weight:800; letter-spacing:4px; color:#ff9d9d; margin-bottom:4px; }
+  /* 실물과 바를 잇는 색 점 — 5웨이브에서 어느 바가 어느 놈인지 알아보게 한다 */
+  .bossbar .bb-dot { width:9px; height:9px; border-radius:50%; flex:none; letter-spacing:0;
+    background:currentColor; box-shadow:0 0 7px currentColor; }
   .bossbar .bb-track { height:13px; background:rgba(0,0,0,.7); border:1px solid rgba(255,120,120,.5); border-radius:7px; overflow:hidden; }
   .bossbar .bb-fill { height:100%; width:100%; background:linear-gradient(90deg,#ff4a4a,#ffb347); transition:width .2s; }
-  .bossbar.enraged .bb-fill { background:linear-gradient(90deg,#ff2d2d,#ff7a2d); animation:bbpulse .7s infinite alternate; }
+  .bossbar .bb-row.enraged .bb-fill { background:linear-gradient(90deg,#ff2d2d,#ff7a2d); animation:bbpulse .7s infinite alternate; }
+  /* 두 마리일 때는 조금 작게 — 화면 위쪽을 덜 먹는다 */
+  .bossbar.multi .bb-name { font-size:12px; letter-spacing:2px; margin-bottom:3px; }
+  .bossbar.multi .bb-track { height:10px; }
   @keyframes bbpulse { from{ filter:brightness(1); } to{ filter:brightness(1.5); } }
   .wave-chip { position:absolute; top:62px; left:50%; transform:translateX(-50%); background:rgba(10,8,22,.7); padding:4px 14px; border-radius:12px; font-size:12px; color:#b39dff; }
   .wave-chip b { color:#ffd166; }
@@ -648,7 +656,7 @@
   .bossbar .bb-name { font-size:13px; font-weight:800; letter-spacing:.04em; color:#ffb3a8; margin-bottom:6px; text-shadow:var(--lift); }
   .bossbar .bb-track { height:10px; background:rgba(11,16,32,.8); border:1px solid rgba(229,83,63,.45); border-radius:3px; }
   .bossbar .bb-fill { background:linear-gradient(90deg,#c8352a,#ff7b4a); }
-  .bossbar.enraged .bb-fill { background:linear-gradient(90deg,#ff3b2b,#ffb14a); animation:bbpulse .7s infinite alternate; }
+  .bossbar .bb-row.enraged .bb-fill { background:linear-gradient(90deg,#ff3b2b,#ffb14a); animation:bbpulse .7s infinite alternate; }
   @keyframes bbpulse { from{ opacity:1; } to{ opacity:.65; } }
   .battlelog { top:66px; left:auto; right:16px; transform:none; width:auto; max-width:min(460px,40vw); align-items:flex-end; gap:4px; }
   .blmsg { background:var(--plate); border:none; border-right:3px solid var(--muted); border-radius:4px 2px 2px 4px; padding:6px 12px; font-size:13px; letter-spacing:0; color:var(--text); }
@@ -889,10 +897,8 @@
   <!-- 웨이브 시작 알림 -->
   <div class="wave-banner hidden" id="waveBanner"><div class="wb-main">더 강력한 발명이가 등장했습니다!</div><div class="wb-sub" id="wbSub">웨이브 2</div></div>
   <!-- 대장급 체력바 -->
-  <div class="bossbar hidden" id="bossBar">
-    <div class="bb-name" id="bbName">발명 대장</div>
-    <div class="bb-track"><div class="bb-fill" id="bbFill"></div></div>
-  </div>
+  <!-- 대장 체력바 — 살아 있는 대장 수만큼 줄이 생긴다 (5웨이브는 두 마리 동시) -->
+  <div class="bossbar hidden" id="bossBar"></div>
   <!-- 전투 현황 문구 -->
   <div class="battlelog" id="battleLog"></div>
   <div class="hp-box">
@@ -3726,6 +3732,19 @@
       scene.add(p);
     }
   }
+  //  탄이 한 프레임에 지나간 선분이 몸통(세운 원기둥)을 통과했는지 — 통과했으면 그 지점을 준다.
+  //  한 프레임 이동량(36m/s × 1/60초 ≒ 0.6m)이 몸통 지름보다 작으므로 네 점만 찍어도 새지 않는다.
+  const BODY_R=0.52;              // 몸통 반경 + 탄 반경
+  function sweepBody(ax,ay,az, p1, cx, cz, cy, alive){
+    if(!alive) return null;
+    const yLo=cy+.15, yHi=cy+1.85;
+    for(let k=0;k<=3;k++){
+      const s=k/3;
+      const x=ax+(p1.x-ax)*s, y=ay+(p1.y-ay)*s, z=az+(p1.z-az)*s;
+      if(y>=yLo && y<=yHi && Math.hypot(x-cx,z-cz)<=BODY_R) return {x,y,z};
+    }
+    return null;
+  }
   function burst(pos,team,attacker,src,opt){
     boom(pos,team);
     if(gameState!=='playing') return;
@@ -3783,7 +3802,10 @@
       });
       if(attacker==='me' && landed) stat.hits++;
     } else {
-      if(playerAlive && pos.distanceTo(camera.position)<1.7) takeHit(null,src);
+      //  머리(카메라) 기준 1.7m 구 + 몸통 원기둥. 구만 쓰면 발치에 맞은 탄이 새어 나간다.
+      const onMe = playerAlive && (pos.distanceTo(camera.position)<1.7
+                   || (pos.y>py+.05 && pos.y<py+eyeH+.35 && Math.hypot(pos.x-px,pos.z-pz)<1.0));
+      if(onMe) takeHit(null,src);
       if(isCoop() && NET.isHost && NET.mate.alive
          && Math.hypot(pos.x-NET.mate.x, pos.y-(NET.mate.y+1.5), pos.z-NET.mate.z)<1.7) relay({k:'hurt'});
       aliveBlues().forEach(e=>{
@@ -3825,11 +3847,15 @@
 
   // ── 대장급 2종 ──────────────────────────────────────────────────────────
   const BOSSES={
-    boss1:{name:'발명 대장',    hp:2200, score:2500, size:2.1, spd:.72, melee:22, skin:2, pattern:'burst'},
-    boss2:{name:'특허 파괴자',  hp:3400, score:4000, size:2.4, spd:.62, melee:28, skin:3, pattern:'fan'  },
-    //  5웨이브 전용 — 5웨이브 발명이(태엽 메카)의 대장판 두 마리. 한 마리는 3점사, 한 마리는 부채꼴+소환
-    boss3:{name:'태엽 대장',    hp:2600, score:3500, size:2.2, spd:.70, melee:24, skin:4, pattern:'burst'},
-    boss3b:{name:'태엽 대장',   hp:2600, score:3500, size:2.2, spd:.66, melee:24, skin:4, pattern:'fan'  }
+    //  accent: 몸통의 발광 패널 색이자 체력바 앞의 점 색. 같은 웨이브에 둘이 나올 때
+    //  '화면 속 저 놈'과 '이 체력바'를 잇는 유일한 단서라 서로 확실히 다른 색을 준다.
+    boss1:{name:'발명 대장',    hp:2200, score:2500, size:2.1, spd:.72, melee:22, skin:2, pattern:'burst', accent:0xd63b3b},
+    boss2:{name:'특허 파괴자',  hp:3400, score:4000, size:2.4, spd:.62, melee:28, skin:3, pattern:'fan'  , accent:0xd63b3b},
+    //  5웨이브 전용 — 태엽 메카의 대장판 두 마리가 '동시에' 나온다.
+    //  덩치도 스킨도 같으므로 이름과 강조색으로만 구분된다. 이름에 패턴을 담아
+    //  (포격=3점사+돌진 / 소환=부채꼴+발명이 불러내기) 누구부터 끊을지 판단할 수 있게 했다.
+    boss3:{name:'태엽 포격대장', hp:2600, score:3500, size:2.2, spd:.70, melee:24, skin:4, pattern:'burst', accent:0xffc24a},
+    boss3b:{name:'태엽 소환대장',hp:2600, score:3500, size:2.2, spd:.66, melee:24, skin:4, pattern:'fan'  , accent:0x55e0ff}
   };
   const BOSS_RAGE = .45;     // 체력이 이 비율 이하로 떨어지면 광폭화
 
@@ -3945,7 +3971,7 @@
   let lives=MAX_LIVES, playerOut=false;
   let score=0, wave=1, waveKills=0, upCnt=0, wlv=1, timeLeft=MATCH_TIME, timeAcc=0;
   let comboN=0, comboT=0, comboMul=1;              // 연속 처치
-  let bossEnt=null;                                // 현재 살아있는 대장
+  //  대장 체력바는 살아 있는 대장 목록에서 매번 다시 그린다 (renderBossBars) — 따로 들고 있지 않는다
   const stat={ kills:0, inventors:0, bosses:0, crits:0, dmgDealt:0, shots:0, hits:0,
                deaths:0, bestCombo:0, maxWave:1, maxWlv:1 };
   const $=id=>document.getElementById(id);
@@ -4051,24 +4077,54 @@
   }
 
   // ═════════ 대장 체력바 ═════════
-  function showBossBar(e){
-    bossEnt=e;
-    const bb=$('bossBar');
-    bb.classList.remove('hidden','enraged');
-    $('bbName').textContent=e.name;
-    $('bbFill').style.width='100%';
+  //  ── 대장 체력바 ──
+  //  예전에는 바가 한 줄뿐이라, 5웨이브처럼 두 마리가 동시에 나오면 한 마리만 보였다.
+  //  게다가 보이던 대장이 죽으면 조용히 다른 대장으로 넘어가서, 플레이어 눈에는
+  //  "다 깎아 놓은 체력이 갑자기 100%로 되돌아간" 것처럼 보였다(회복했다고 오해).
+  //  이제 살아 있는 대장 수만큼 줄을 만든다 — 두 마리면 두 줄.
+  const bossAccent=key=>'#'+(((BOSSES[key]&&BOSSES[key].accent)||0xd63b3b)>>>0).toString(16).padStart(6,'0');
+  const bossRows=new Map();                      // key → 줄 엘리먼트 묶음
+  function clearBossBars(){
+    for(const [,r] of bossRows) r.row.remove();
+    bossRows.clear();
+    const bb=$('bossBar'); bb.classList.add('hidden'); bb.classList.remove('multi');
   }
-  function updateBossBar(){
+  //  list: [{key, name, hp, maxHp, rage, accent}] — 등장 순서대로
+  function renderBossBars(list){
     const bb=$('bossBar');
-    //  표시 중이던 대장이 죽으면 살아 있는 다른 대장으로 넘긴다 (5웨이브 2마리 대응)
-    if(!bossEnt || !bossEnt.alive){
-      bossEnt=entities.find(e=>e.isBoss&&e.alive)||null;
-      if(!bossEnt){ bb.classList.add('hidden'); return; }
-      $('bbName').textContent=bossEnt.name;
-      bb.classList.remove('hidden');
-    }
-    $('bbFill').style.width=Math.max(0,bossEnt.hp/bossEnt.maxHp*100)+'%';
-    bb.classList.toggle('enraged', !!bossEnt.enraged);
+    bb.classList.toggle('hidden', !list.length);
+    bb.classList.toggle('multi', list.length>1);
+    //  사라진 대장의 줄을 걷어낸다
+    for(const [k,r] of bossRows)
+      if(!list.some(b=>b.key===k)){ r.row.remove(); bossRows.delete(k); }
+    list.forEach((b,i)=>{
+      let r=bossRows.get(b.key);
+      if(!r){
+        const row=document.createElement('div');
+        row.className='bb-row';
+        row.innerHTML='<div class="bb-name"><i class="bb-dot"></i><span></span></div>'
+                     +'<div class="bb-track"><div class="bb-fill"></div></div>';
+        bb.appendChild(row);
+        r={row, dot:row.querySelector('.bb-dot'), nameEl:row.querySelector('.bb-name span'),
+           fill:row.querySelector('.bb-fill'), pct:-1, rage:null, nm:'', ac:''};
+        bossRows.set(b.key, r);
+      }
+      //  바뀐 값만 건드린다 — 매 프레임 doms 를 다시 쓰면 width 전환이 끊긴다
+      if(r.nm!==b.name){ r.nm=b.name; r.nameEl.textContent=b.name; }
+      if(r.ac!==b.accent){ r.ac=b.accent; r.dot.style.color=b.accent; }
+      const pct=Math.max(0, Math.min(100, b.maxHp>0? b.hp/b.maxHp*100 : 0));
+      if(Math.abs(pct-r.pct)>.05){ r.pct=pct; r.fill.style.width=pct+'%'; }
+      if(r.rage!==b.rage){ r.rage=b.rage; r.row.classList.toggle('enraged', b.rage); }
+      if(bb.children[i]!==r.row) bb.insertBefore(r.row, bb.children[i]||null);   // 등장 순서 유지
+    });
+  }
+  function showBossBar(e){ updateBossBar(); }
+  //  방장·싱글 — 내 월드의 대장들
+  function updateBossBar(){
+    renderBossBars(entities.filter(e=>e.isBoss&&e.alive).map(e=>({
+      key:'e'+(e.netId||e.name), name:e.name, hp:e.hp, maxHp:e.maxHp,
+      rage:!!e.enraged, accent:bossAccent(e.bossKey)
+    })));
   }
 
   // ═════════ 피해 처리 ═════════
@@ -4183,7 +4239,7 @@
     const j=solid.indexOf(e.group); if(j>=0) solid.splice(j,1);
     scene.remove(e.group);
     disposeParts(e.group);
-    if(bossEnt===e){ bossEnt=null; $('bossBar').classList.add('hidden'); }
+    if(e.isBoss) updateBossBar();                  // 줄 하나가 빠진다
   }
   function spawnFx(e){
     e.spawnT=.55; e.dyingT=0; e.hitT=0;
@@ -4215,7 +4271,7 @@
     if(isGuest()) return null;
     const B=BOSSES[key];
     const g=makeBalmyeongi(0xd63b3b);
-    applyNpcSkin(g, B.skin, 0xd63b3b);
+    applyNpcSkin(g, B.skin, B.accent||0xd63b3b);   // 몸통 발광 패널 = 체력바 앞의 점과 같은 색
     const p=pickSpawn(16, 28);
     const e=addEntity(g, B.name, 'red', B.hp, p[0], p[1], false);
     e.label.sprite.position.y=g.userData.labelY;
@@ -4405,7 +4461,7 @@
     clearInterval(fireTimer); fireTimer=null;
     clearInterval(cdTimer); cdTimer=null;
     hud.classList.add('hidden');
-    $('bossBar').classList.add('hidden');
+    clearBossBars();
     document.body.classList.remove('paused');
     setTimeout(()=>{
       buildResult(); show($('scr3')); BGM.result(matchCleared);
@@ -4437,7 +4493,7 @@
     parts.forEach(p=>scene.remove(p.mesh)); parts.length=0;
     flash.intensity=0;
     clearNPCs();
-    bossEnt=null; $('bossBar').classList.add('hidden');
+    clearBossBars();
     hp=pMaxHp; playerAlive=true; playerRespawnT=0; invulnT=0;
     lives=MAX_LIVES; playerOut=false; updateLifeHUD();
     shieldT=0; shieldCd=0; shieldHit=0; powerT=0; spdBuffT=0; meleeT=0; meleeCdT=0;
@@ -5012,17 +5068,17 @@
     ghostShowHp(ge);
     if(ge.isBoss) ghostBossBar();
   }
-  //  참여자 대장 체력바 — 화면에 보이는 체력(예측 포함)으로 그린다
+  //  참여자 대장 체력바 — 화면에 보이는 체력(예측 포함)으로, 살아 있는 대장 전부를 그린다
   function ghostBossBar(){
-    let bs=null;
-    for(const [,g2] of mateEnts) if(g2.isBoss && g2.alive){ bs=g2; break; }
-    const bb=$('bossBar');
-    if(!bs){ bb.classList.add('hidden'); return; }
-    const v=bs.shownHp>=0? bs.shownHp : bs.hp;
-    bb.classList.remove('hidden');
-    $('bbName').textContent=(BOSSES[bs.bossKey]&&BOSSES[bs.bossKey].name)||'대장';
-    $('bbFill').style.width=Math.max(0,v/bs.maxHp*100)+'%';
-    bb.classList.toggle('enraged', v<=bs.maxHp*BOSS_RAGE);
+    const list=[];
+    for(const [,g2] of mateEnts){
+      if(!g2.isBoss || !g2.alive) continue;
+      const v=g2.shownHp>=0? g2.shownHp : g2.hp;
+      list.push({key:'g'+g2.id, name:(BOSSES[g2.bossKey]&&BOSSES[g2.bossKey].name)||'대장',
+                 hp:v, maxHp:g2.maxHp, rage:v<=g2.maxHp*BOSS_RAGE, accent:bossAccent(g2.bossKey)});
+    }
+    list.sort((a,b)=>a.key<b.key? -1 : 1);        // netId 순 = 등장 순 (줄이 튀지 않게)
+    renderBossBars(list);
   }
   function ghostHit(ge){
     if(!ge || !ge.alive) return;
@@ -5152,7 +5208,8 @@
       let ge=mateEnts.get(id);
       if(!ge){
         const g=makeBalmyeongi(0xd63b3b);
-        applyNpcSkin(g, skin, 0xd63b3b);
+        //  대장은 방장 화면과 같은 강조색을 써야 체력바의 점과 이어진다
+        applyNpcSkin(g, skin, (boss && BOSSES[bkey] && BOSSES[bkey].accent) || 0xd63b3b);
         g.scale.setScalar(0.95*sizeMul);
         //  머리 위 이름표 + 체력바 — 호스트 화면과 똑같이 달아 준다.
         //  이게 없으면 게스트 쪽에서는 발명이 피가 닳는 게 전혀 보이지 않는다.
@@ -6006,8 +6063,40 @@
     }
     return [sx,sz];
   }
+  //  ── 벽에 끼었을 때 빠져나오기 ──
+  //  entMove 는 x/z 축을 따로 검사해 벽을 타고 미끄러진다. 하지만 오목한 모서리처럼
+  //  두 축이 동시에 막히면 완전히 멈추고, 봇은 목표 쪽으로 계속 밀기만 하므로 그 자리에서 굳는다.
+  //  (3웨이브 대장이 구조물에 끼어 판이 끝날 때까지 벽에 대고 사격만 하던 원인 —
+  //   bossBrain 에는 npcBrain 사냥 모드 같은 끼임 감지조차 없었다)
+  //  일정 시간 진척이 없으면 목표와 수직인 쪽으로 잠시 우회해 벽을 돌아 나가게 한다.
+  const JAM_T=.55;         // 이만큼 제자리면 끼었다고 본다(초)
+  const DETOUR_T=1.6;      // 우회를 유지하는 시간(초) — 상자 하나를 돌아 나갈 만큼
+  //  막혔을 때 갈 곳 고르기 — 12방향을 실제 충돌 판정으로 훑어 "걸어갈 수 있는" 방향만 남기고,
+  //  그중 목표 쪽에 가장 가까운 방향을 고른다. 뚫린 곳이 없으면 null(그 자리에서 계속 시도).
+  //  수직으로 무조건 꺾는 방식은 막다른 구석에서는 양쪽 다 막혀 빠져나오지 못했다.
+  function pickDetour(e, ux, uz){
+    const g=e.group, H=1.6;
+    let best=null, bestSc=-9;
+    for(let i=0;i<12;i++){
+      const a=i/12*Math.PI*2, sx=Math.sin(a), sz=Math.cos(a);
+      //  ⚠️ 한 점만 찍어 보면 안 된다. 벽 두께가 0.4m 남짓이라 1.2m 앞 표본이 벽 "너머"에
+      //  떨어져서, 정면이 벽인데도 뚫린 것으로 읽힌다(대장이 벽에 대고 우회하던 원인).
+      //  0.4m 간격으로 훑어 도중에 한 칸이라도 막히면 그 방향은 버린다.
+      let open=true;
+      for(let r=.4; r<=1.6; r+=.4){
+        const nx=g.position.x+sx*r, nz=g.position.z+sz*r;
+        if(blockedAt(nx,e.py,nz,H) && blockedAt(nx,e.py+.46,nz,H)){ open=false; break; }
+      }
+      if(!open) continue;
+      const sc=sx*ux+sz*uz+Math.random()*.35;      // 목표 쪽일수록 가산 (+ 약간의 무작위로 좌우 교착 방지)
+      if(sc>bestSc){ bestSc=sc; best=[sx,sz]; }
+    }
+    return best? [g.position.x+best[0]*4.5, g.position.z+best[1]*4.5] : null;
+  }
   function entMove(e,tx,tz,spd,dt){ // 봇 이동: 충돌/턱오르기/지형스냅 + 실제 이동 벡터 기록
     const g=e.group;
+    //  우회 중이면 원래 목표 대신 우회점으로 간다
+    if(e.detourT>0){ e.detourT-=dt; tx=e.detourX; tz=e.detourZ; }
     const dx=tx-g.position.x, dz=tz-g.position.z;
     const d=Math.hypot(dx,dz);
     e.moveDx=0; e.moveDz=0;
@@ -6031,11 +6120,56 @@
     const nz=g.position.z+vz;
     if(embedded || !blockedAt(g.position.x,e.py,nz,H)) g.position.z=nz;
     else if(!blockedAt(g.position.x,e.py+.46,nz,H)) g.position.z=nz;
+    //  x·z 어느 쪽으로도 못 갔다 — 축을 따로 검사하면 대각선으로 열린 틈을 보지 못한다.
+    //  (오목한 모서리에서 봇이 영영 굳던 진짜 이유. 우회 목표를 줘도 그리로 갈 수가 없었다)
+    //  진행 방향을 좌우로 돌려 가며 "두 축을 한꺼번에" 검사해 빠져나갈 틈을 찾는다.
+    //  ⚠️ "좌표가 한 톨도 안 변했나"로 보면 안 된다. 목표가 거의 정면이면 다른 축 성분이
+    //  0.0001m 처럼 미세하게 남아, 사실상 벽에 붙어 있는데도 "움직였다"가 되어 탈출이 꺼졌다.
+    //  의도한 한 걸음의 절반도 못 갔으면 막힌 것으로 본다.
+    const r=Math.hypot(vx,vz);
+    if(!embedded && Math.hypot(g.position.x-ox, g.position.z-oz) < r*.5){
+      const base=Math.atan2(vx,vz);
+      for(const off of [.6,-.6,1.2,-1.2,1.9,-1.9,2.6,-2.6,Math.PI]){
+        const a=base+off, cx=ox+Math.sin(a)*r, cz=oz+Math.cos(a)*r;
+        if(!blockedAt(cx,e.py,cz,H) || !blockedAt(cx,e.py+.46,cz,H)){ g.position.x=cx; g.position.z=cz; break; }
+      }
+    }
     const sup=supportAt(g.position.x,g.position.z,e.py+.5);
     e.py+=(sup-e.py)*Math.min(1,dt*8);
     e.moveDx=g.position.x-ox; e.moveDz=g.position.z-oz; // 모션 분해용 실제 변위
     const moved=Math.hypot(e.moveDx,e.moveDz)>spd*dt*.15;
     if(moved && d>.3) e.headTgt=Math.atan2(dx,dz); // 목표 쪽을 바라보되, 회전은 부드럽게 (밀려난 방향이 아니라 목표 쪽)
+    //  목표가 아직 먼데도 실제로 못 움직였다 → 끼었다
+    if(!moved && d>.6){
+      e.jamT=(e.jamT||0)+dt;
+      if(e.jamT>JAM_T && !(e.detourT>0)){          // detourT 는 처음엔 undefined — 비교 대신 부정으로 본다
+        e.jamT=0;
+        const t2=pickDetour(e, dx/d, dz/d);
+        if(t2){ e.detourX=t2[0]; e.detourZ=t2[1]; e.detourT=DETOUR_T; }
+      }
+    } else e.jamT=0;
+    //  ── 마지막 안전장치: 1초마다 실제 진척을 본다 ──
+    //  프레임 단위 moved 플래그는 벽에 대고 3mm 씩 떠는 것도 "움직였다"로 쳐서 소용이 없다.
+    //  옆으로 비키기도, 격자 길찾기도 멈춤 시간을 의미 있게 줄이지 못했다
+    //  (계측: 원본 37초 / 지역회피 34초 / 길찾기 49초 — 전부 오차 범위).
+    //  봇 하나가 판이 끝날 때까지 굳어 버리는 것보다는, 4초 동안 제자리면 정상 스폰 지점으로
+    //  다시 내보내는 편이 낫다. 등장 연출이 붙어 순간이동처럼 보이지 않는다.
+    if(!e.isAgent){
+      e.progT=(e.progT||0)+dt;
+      if(e.progT>=1){
+        const gone=e.progX==null? 9 : Math.hypot(g.position.x-e.progX, g.position.z-e.progZ);
+        e.progX=g.position.x; e.progZ=g.position.z; e.progT=0;
+        if(gone<.3 && d>1.2) e.jamHard=(e.jamHard||0)+1; else e.jamHard=0;
+        if(e.jamHard>=4){
+          e.jamHard=0; e.jamT=0; e.detourT=0;
+          const sp=pickSpawn(10, 22);
+          g.position.x=sp[0]; g.position.z=sp[1]; e.py=0;
+          e.progX=sp[0]; e.progZ=sp[1];
+          spawnFx(e);
+          return false;
+        }
+      }
+    }
     return moved;
   }
   function nearestFoe(e,maxD){
@@ -6275,6 +6409,15 @@
     const fz = onMate? NET.mate.z : camera.position.z;
     const fy = onMate? NET.mate.y+1.5 : camera.position.y-.1;   // 조준 높이
     const hurt = dmg => onMate? relay({k:'hurt', v:dmg}) : takeHit(dmg, e);
+    //  시야가 막혔으면 쏘지 않는다 — 예전에는 엄폐물 너머로도 계속 쏴서,
+    //  탄이 전부 벽에 막히는데도 대장은 열심히 사격하는 것처럼 보였다.
+    //  (매 프레임 검사하면 비싸므로 0.15초마다만 갱신한다)
+    e.losT=(e.losT||0)-dt;
+    if(e.losT<=0){
+      e.losT=.15;
+      const my=e.py+1.5*(e.baseScale||1)*(e.sizeMul||1);
+      e.canSee=losClear(ex,my,ez, fx,fy,fz);
+    }
     const d=Math.hypot(fx-ex,fz-ez);
     e.headTgt=Math.atan2(fx-ex,fz-ez);
     const rage=e.enraged? 1.5 : 1;
@@ -6303,6 +6446,7 @@
       return t;
     };
     e.fireCd-=dt*rage;
+    if(!e.canSee && e.chargeT<=0) return moved;    // 막혀 있으면 쿨다운만 돌고 쏘지는 않는다
     if(e.pattern==='burst'){
       if(e.burstN>0){                                  // 3점사 중
         if(e.fireCd<=0){
@@ -7454,7 +7598,23 @@
         boom(b.mesh.position,b.team,true);
         scene.remove(b.mesh); bolts.splice(i,1); continue;
       }
+      const bx0=b.mesh.position.x, by0=b.mesh.position.y, bz0=b.mesh.position.z;   // 이동 전 위치
       b.mesh.position.addScaledVector(b.dir,step); b.gone+=step;
+      //  ── 몸을 스치고 지나가는 탄 (연속 충돌) ──
+      //  예전에는 피해를 "미리 정해 둔 도착 지점"에서 한 번만 판정했다. 대장의 부채꼴 사격은
+      //  플레이어가 아니라 대장 기준 20m 지점을 겨누므로, 탄이 몸을 관통해도 20m 밖에서 터졌다
+      //  — 아무리 정통으로 맞아도 체력이 1도 깎이지 않았다(계측: 50발 중 피해 0).
+      //  이제 이번 프레임에 탄이 지나간 선분을 몸통과 직접 겹쳐 본다.
+      if(b.team!=="blue" && !(b.opt&&b.opt.ghost) && gameState==="playing"){
+        const hit = sweepBody(bx0,by0,bz0, b.mesh.position, px, pz, py, playerAlive)
+                 || (isCoop() && NET.isHost && NET.mate.alive
+                     ? sweepBody(bx0,by0,bz0, b.mesh.position, NET.mate.x, NET.mate.z, NET.mate.y, true) : null);
+        if(hit){
+          b.mesh.position.set(hit.x, hit.y, hit.z);
+          burst(b.mesh.position,b.team,b.attacker,b.src,b.opt);
+          scene.remove(b.mesh); bolts.splice(i,1); continue;
+        }
+      }
       if(b.gone>=b.dist){
         //  동료 탄(ghost)은 눈으로만 보이는 탄이다. 여기서 burst 를 부르면
         //  쏜 쪽이 이미 보고한 피해에 더해 두 번 들어간다.
