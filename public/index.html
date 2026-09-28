@@ -8,7 +8,8 @@
   * { margin:0; padding:0; box-sizing:border-box; }
   html,body { width:100%; height:100%; overflow:hidden; background:#000; }
   body { font-family:'Pretendard Variable','Pretendard','Malgun Gothic',sans-serif; user-select:none; color:#fff; }
-  canvas.game { position:fixed; inset:0; display:block; cursor:none; }
+  canvas.game { position:fixed; inset:0; display:block; }
+  body.nocursor canvas.game { cursor:none; }
   /* ESC 일시정지 중에는 커서를 다시 드러내 버튼을 클릭할 수 있게 한다 */
   body.paused canvas.game, body.paused { cursor:default; }
   #mPause, #mPause * { cursor:default; }
@@ -287,10 +288,12 @@
   .rank-col { min-height:0; display:flex; flex-direction:column; }
   .rank-cap { text-align:center; font-size:15px; font-weight:800; letter-spacing:4px; color:#ffd166; margin-bottom:10px; }
   .rank-cap.coop { color:#5fe0a0; }
-  @media (max-width:900px){ .rank-cols { grid-template-columns:1fr; } .rank-wrap { height:auto; max-height:92vh; overflow-y:auto; } .rank-col { height:320px; } }
+  @media (max-width:900px){ .rank-cols { grid-template-columns:1fr; } .rank-wrap { height:auto; max-height:92vh; overflow-y:auto; } .rank-col { height:320px; }
+    .rank-head, .rank-row, .rank-panel.team .rank-head, .rank-panel.team .rank-row { grid-template-columns:40px minmax(0,1fr) 46px 50px 54px 84px; } }
   .rank-panel { flex:1; min-height:0; display:flex; flex-direction:column;
     background:rgba(20,15,40,.55); border:1px solid rgba(138,92,255,.3); border-radius:14px; overflow:hidden; }
-  .rank-head, .rank-row { display:grid; grid-template-columns:48px 1fr 78px 54px 88px; align-items:center; gap:8px; padding:10px 16px; }
+  .rank-head, .rank-row { display:grid; grid-template-columns:42px minmax(0,1fr) 62px 64px 66px 98px; align-items:center; gap:6px; padding:9px 14px; }
+  .rank-panel.team .rank-head, .rank-panel.team .rank-row { grid-template-columns:42px minmax(0,1fr) 50px 52px 56px 92px; }
   .rank-head { font-size:12px; font-weight:800; letter-spacing:2px; color:#b39dff; background:rgba(0,0,0,.3); }
   .rank-list { flex:1; min-height:0; overflow-y:auto; }
   .rank-row { font-size:14px; border-top:1px solid rgba(255,255,255,.07); }
@@ -299,7 +302,15 @@
   .rank-row.me { background:rgba(255,209,102,.12); }
   .rank-row .nm { font-weight:700; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .rank-row .ch { font-size:12px; color:#8fd4ff; }
-  .rank-row .wv { font-size:12px; color:rgba(255,255,255,.6); }
+  .rank-row .wv, .rank-row .du, .rank-row .ts { font-size:12px; color:rgba(255,255,255,.6); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .rank-row .nm .md { display:inline-block; vertical-align:1px; margin-left:6px; font-size:10px; font-weight:800; letter-spacing:.04em; padding:1px 6px; border-radius:4px; border:1px solid var(--line2); color:var(--muted); }
+  .rank-row .nm .md.coop { color:var(--blue); border-color:rgba(74,146,230,.5); }
+  .rank-bar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
+  .rank-tabs { display:flex; gap:6px; }
+  .rank-tab { font:inherit; font-size:13px; font-weight:700; color:var(--muted); background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:7px 16px; cursor:pointer; }
+  .rank-tab:hover { color:var(--text); border-color:var(--line2); }
+  .rank-tab.on { color:#1a1206; background:var(--accent); border-color:var(--accent); }
+  .rank-meta { font-size:12px; color:var(--muted); }
   .rank-row .sc { font-weight:900; color:#ffe9a8; text-align:right; }
   .lobby-sub { text-align:center; font-size:13px; color:#b39dff; margin-bottom:18px; }
   .lobby-sub.err { color:#ff9d9d; }
@@ -410,7 +421,7 @@
     opacity:.42; transition:opacity .25s ease;
     filter:drop-shadow(0 2px 6px rgba(0,0,0,.55)); }
   #scr0 .studio:hover { opacity:1; }
-  #scr0 .studio img { display:block; width:124px; height:auto; }
+  #scr0 .studio img { display:block; width:186px; height:auto; }
   #btnMute { background:rgba(11,16,32,.6); border:1px solid var(--line); border-radius:var(--r); display:flex; align-items:center; justify-content:center; }
   #btnMute svg { width:18px; height:18px; }
   #btnMute:hover { border-color:rgba(255,255,255,.4); }
@@ -491,6 +502,33 @@
   .pz-t { font-size:26px; font-weight:900; letter-spacing:0; color:var(--text); margin-bottom:6px; }
   .pz-s { font-size:14px; color:var(--muted); margin-bottom:24px; }
   .pz-btns { gap:10px; }
+  /* ── 마우스 감도 — 막대가 왼쪽에서 오른쪽으로 높아져 느림·빠름이 형태로 읽힌다 ── */
+  .sens { margin:-8px 0 24px; }
+  .sens-t { font-size:12px; font-weight:800; letter-spacing:.08em; color:var(--muted); margin-bottom:10px; }
+  /*  5칸 슬라이더 — 트랙과 눈금은 아래에 깔고, 실제 input 은 그 위에 투명하게 덮는다.
+      (input[type=range] 의 트랙을 브라우저마다 다르게 그리는 것을 피하려는 구조) */
+  .sens-row { position:relative; height:26px; padding:0 9px; }
+  /*  좌우 8px — 2px 눈금의 중심이 썸이 멈추는 자리(양끝 9px)와 정확히 맞는다.
+      테두리는 box-shadow 로 그려 content box 를 줄이지 않는다. */
+  .sens-track { position:absolute; left:8px; right:8px; top:50%; height:4px; margin-top:-2px;
+    background:var(--panel); box-shadow:inset 0 0 0 1px var(--line); border-radius:2px;
+    display:flex; justify-content:space-between; align-items:center; }
+  .sens-track span { width:2px; height:8px; background:var(--line2); border-radius:1px; }
+  .sens-range { position:absolute; inset:0; width:100%; height:100%; margin:0; cursor:pointer;
+    background:none; border:none; -webkit-appearance:none; appearance:none; }
+  .sens-range::-webkit-slider-runnable-track { height:100%; background:none; border:none; }
+  .sens-range::-moz-range-track { height:100%; background:none; border:none; }
+  .sens-range::-webkit-slider-thumb { -webkit-appearance:none; appearance:none;
+    width:18px; height:18px; margin-top:4px; border-radius:50%;
+    background:var(--accent); border:2px solid var(--ink); cursor:pointer;
+    transition:transform .1s; }
+  .sens-range::-moz-range-thumb { width:18px; height:18px; border-radius:50%;
+    background:var(--accent); border:2px solid var(--ink); cursor:pointer; }
+  .sens-range:hover::-webkit-slider-thumb { transform:scale(1.12); }
+  .sens-range:focus-visible { outline:2px solid var(--text); outline-offset:3px; border-radius:var(--r); }
+  /* 양 끝이 방향을, 가운데 '기본'이 원래 자리를 알려 준다 */
+  .sens-lab { display:flex; justify-content:space-between; margin-top:7px; font-size:11px; color:var(--muted); }
+  .sens-lab .mid { color:var(--line2); }
   .pick-msg { font-size:14px; color:var(--muted); }
   .sel-foot { margin-top:20px; }
 
@@ -579,11 +617,13 @@
   .rank-panel { background:var(--card); border:1px solid var(--line); border-radius:8px; }
   .rank-head { font-size:12px; font-weight:700; letter-spacing:.04em; color:var(--muted); background:rgba(0,0,0,.22); border-bottom:1px solid var(--line); }
   .rank-head span:last-child { text-align:right; }
+  .rank-head span:nth-child(3), .rank-head span:nth-child(4), .rank-head span:nth-child(5) { text-align:center; }
+  .rank-row .wv, .rank-row .du, .rank-row .ts { text-align:center; }
   .rank-row .rk { font-weight:900; color:var(--muted); font-variant-numeric:tabular-nums; }
   .rank-row.top1 .rk { color:#ffc862; } .rank-row.top2 .rk { color:#d5dde8; } .rank-row.top3 .rk { color:#d99a62; }
   .rank-row.me { background:linear-gradient(90deg,rgba(240,169,58,.16),rgba(240,169,58,.02)); }
   .rank-row .nm { color:var(--text); }
-  .rank-row .ch, .rank-row .wv { color:var(--muted); }
+  .rank-row .ch, .rank-row .wv, .rank-row .du, .rank-row .ts { color:var(--muted); }
   .rank-row .sc { font-weight:900; color:#ffe2a6; font-variant-numeric:tabular-nums; }
   .rank-empty { color:var(--muted); }
 
@@ -873,6 +913,73 @@
   /* 마지막 한 개 — 숨 쉬듯 경고 */
   .life-row.low .lf-pip.on svg { animation:lfLow .85s ease-in-out infinite alternate; }
   @keyframes lfLow { from{ filter:drop-shadow(0 0 4px rgba(255,90,110,.5)); } to{ filter:drop-shadow(0 0 12px rgba(255,90,110,1)); } }
+
+  /* ═════════ 연습 모드 · 자유 공원 ═════════ */
+  .prac-card { width:min(560px,92vw); }
+  .prac-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:6px 0 20px; }
+  .prac-opt { position:relative; display:flex; flex-direction:column; align-items:center; gap:6px; padding:22px 14px 18px; cursor:pointer;
+    color:var(--text); background:var(--panel); border:1px solid var(--line); border-radius:var(--r); font-family:inherit; text-align:center;
+    transition:border-color .12s, background .12s; }
+  .prac-opt svg { width:34px; height:34px; color:var(--accent); margin-bottom:4px; }
+  .prac-opt b { font-size:16px; font-weight:900; }
+  .prac-opt span { font-size:12px; color:var(--muted); line-height:1.5; }
+  .prac-opt i { position:absolute; top:10px; right:10px; font-style:normal; font-size:10.5px; font-weight:800; letter-spacing:.06em;
+    color:var(--muted); border:1px solid var(--line); border-radius:4px; padding:2px 6px; }
+  .prac-opt:hover:not(:disabled) { border-color:var(--accent); background:rgba(240,169,58,.10); }
+  .prac-opt:disabled { opacity:.45; cursor:not-allowed; }
+  .prac-opt:focus-visible { outline:2px solid var(--text); outline-offset:2px; }
+  /* 공원에서는 전투 HUD 를 숨긴다 — 남는 것: 미니맵 · 공원 칩 · 채팅 */
+  .hud.park .plate.score, .hud.park .plate.time, .hud.park .wave-chip, .hud.park .streak, .hud.park .hp-box, .hud.park .wep,
+  .hud.park .skillbar, .hud.park .xh, .hud.park .bossbar, .hud.park .battlelog, .hud.park .wave-banner, .hud.park .hint, .hud.park #lockHint { display:none !important; }
+  .park-chip { position:absolute; top:14px; left:50%; transform:translateX(-50%); font-size:13px; font-weight:800; letter-spacing:.02em;
+    color:var(--text); background:var(--hud); border:1px solid var(--line); border-radius:var(--r); padding:8px 14px; text-shadow:var(--lift); }
+  .park-chat { position:absolute; left:18px; bottom:18px; width:min(420px,60vw); display:flex; flex-direction:column; gap:6px; pointer-events:none; }
+  .chat-log { display:flex; flex-direction:column; gap:3px; }
+  .chat-log .cl { font-size:13px; line-height:1.45; color:var(--text); background:rgba(11,16,32,.62); border-radius:var(--r); padding:5px 10px;
+    align-self:flex-start; max-width:100%; word-break:break-all; transition:opacity .4s; }
+  .chat-log .cl b { color:var(--ally); font-weight:800; margin-right:4px; }
+  .chat-log .cl.me b { color:var(--accent); }
+  .chat-log .cl.sys { color:var(--muted); background:rgba(11,16,32,.45); }
+  .chat-in { display:none; align-items:center; gap:8px; background:var(--hud); border:1px solid var(--line2); border-radius:var(--r); padding:7px 10px; pointer-events:auto; }
+  .chat-in span { font-size:11px; font-weight:800; color:var(--muted); border:1px solid var(--line); border-radius:4px; padding:2px 6px; }
+  .chat-in input { flex:1; background:none; border:none; outline:none; color:var(--text); font-family:inherit; font-size:14px; }
+  .chat-in input::placeholder { color:var(--muted); }
+  .park-chat.typing .chat-in { display:flex; }
+
+  /* ═════════ 튜토리얼 ═════════ */
+  .hud.tutmode .plate.score, .hud.tutmode .plate.time, .hud.tutmode .wave-chip, .hud.tutmode .streak, .hud.tutmode .wep, .hud.tutmode .bossbar,
+  .hud.tutmode .battlelog, .hud.tutmode .wave-banner, .hud.tutmode .hint, .hud.tutmode #lockHint, .hud.tutmode .minimap { display:none !important; }
+  .tut-prog { position:absolute; top:14px; left:50%; transform:translateX(-50%); font-size:15px; font-weight:800; letter-spacing:.02em;
+    color:var(--text); background:var(--hud); border:1px solid var(--line); border-radius:var(--r); padding:8px 14px; text-shadow:var(--lift); }
+  /*  왼쪽 아래 — 오른쪽 아래는 1인칭 총·손이 차지한다. 얼굴은 상자 위쪽에 붙여 두어
+      과제 칩이 늘어 상자가 커져도 함께 밀려 올라가며 제자리를 지킨다. */
+  .tut { position:absolute; left:24px; right:auto; bottom:126px; width:min(548px,58vw); display:flex; gap:13px; align-items:flex-start; pointer-events:none; }
+  .tut-face { width:112px; height:112px; flex-shrink:0; border-radius:50%; overflow:hidden; background:radial-gradient(circle at 40% 35%, #2a3352, #121a30);
+    border:2px solid var(--line2); box-shadow:0 4px 14px rgba(0,0,0,.45); animation:tutBob 2.6s ease-in-out infinite; }
+  .tut-face img { width:100%; height:100%; display:block; object-fit:cover; }
+  @keyframes tutBob { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-4px); } }
+  .tut-body { flex:1; min-width:0; background:var(--hud); border:1px solid var(--line2); border-radius:var(--r); padding:16px 18px 13px;
+    box-shadow:0 8px 24px rgba(0,0,0,.4); position:relative; }
+  .tut-body::after { content:''; position:absolute; left:-11px; top:44px; border:10px solid transparent; border-right-color:var(--line2); border-left:0; }
+  .tut-name { font-size:14px; font-weight:800; letter-spacing:.1em; color:var(--danger); margin-bottom:7px; }
+  .tut-text { font-size:19px; line-height:1.55; color:var(--text); min-height:60px; word-break:keep-all; }
+  .tut.talk .tut-text::after { content:'▏'; color:var(--accent); animation:tutCaret 1s steps(2) infinite; }
+  @keyframes tutCaret { 50% { opacity:0; } }
+  .tut-tasks { display:flex; flex-wrap:wrap; gap:7px; margin-top:12px; }
+  .tt { display:inline-flex; align-items:center; gap:7px; font-size:14px; font-weight:700; color:var(--muted);
+    border:1px solid var(--line); border-radius:var(--r); padding:5px 11px; background:rgba(0,0,0,.25); }
+  .tt i { width:14px; height:14px; border-radius:3px; border:1.5px solid var(--line2); display:inline-block; }
+  .tt.now { color:var(--text); border-color:var(--accent); }
+  .tt.now i { border-color:var(--accent); background:rgba(240,169,58,.25); }
+  .tt.done { color:var(--muted); }
+  .tt.done i { background:var(--hp); border-color:var(--hp);
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.5l2.5 2.5 4.5-5' fill='none' stroke='%230b1020' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+  .tut-hint { margin-top:9px; font-size:12.5px; color:var(--muted); min-height:15px; }
+  .tut-praise { position:absolute; left:50%; top:38%; transform:translate(-50%,-50%); font-size:56px; font-weight:900; letter-spacing:-.01em;
+    color:var(--accent); text-shadow:0 4px 0 rgba(120,70,10,.45), 0 8px 30px rgba(0,0,0,.35); pointer-events:none; }
+  .tut-praise.pop { animation:tutPop 1.3s cubic-bezier(.2,1.4,.4,1) forwards; }
+  @keyframes tutPop { 0% { opacity:0; transform:translate(-50%,-50%) scale(.6); } 18% { opacity:1; transform:translate(-50%,-50%) scale(1.08); }
+    80% { opacity:1; transform:translate(-50%,-56%) scale(1); } 100% { opacity:0; transform:translate(-50%,-70%) scale(1); } }
 </style>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 </head>
@@ -941,6 +1048,22 @@
   </div>
   <div id="deadNote" class="hidden"></div>
   <div id="lockHint" class="hidden">화면을 클릭하면 시점 조작이 시작됩니다</div>
+  <div class="park-chip hidden" id="parkChip">자유 공원</div>
+  <div class="tut-prog hidden" id="tutProg"></div>
+  <div class="tut-praise hidden" id="tutPraise"></div>
+  <div class="tut hidden" id="tutBox">
+    <div class="tut-face"><img id="tutFace" alt=""></div>
+    <div class="tut-body">
+      <div class="tut-name">발명이</div>
+      <div class="tut-text" id="tutText"></div>
+      <div class="tut-tasks" id="tutTasks"></div>
+      <div class="tut-hint" id="tutHint"></div>
+    </div>
+  </div>
+  <div class="park-chat hidden" id="parkChat">
+    <div class="chat-log" id="chatLog"></div>
+    <div class="chat-in"><span>Enter</span><input id="chatIn" type="text" maxlength="60" placeholder="이야기하기 (Esc 취소)" autocomplete="off"></div>
+  </div>
   <div class="minimap" id="minimap"><canvas id="mmCv" width="168" height="174"></canvas></div>
   <div id="cdown" class="hidden">3</div>
   <div class="skillbar">
@@ -989,6 +1112,7 @@
     <button class="mbtn story" id="btnStory"><span>스토리</span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3l5 5-5 5"/></svg></button>
     <button class="mbtn primary" id="btnPlay"><span>싱글 플레이</span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3l5 5-5 5"/></svg></button>
     <button class="mbtn primary" id="btnMulti"><span>멀티 플레이</span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3l5 5-5 5"/></svg></button>
+    <button class="mbtn" id="btnPractice"><span>연습 모드</span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3l5 5-5 5"/></svg></button>
     <button class="mbtn" id="btnRank"><span>랭킹</span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3l5 5-5 5"/></svg></button>
   </div>
   <div class="foot">싱글 · 2인 협동 · 180초 점수전</div>
@@ -1069,18 +1193,27 @@
   <button class="btn ghost backBtn" id="btnRankBack"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3L5 8l5 5"/></svg><span>뒤로</span></button>
   <div class="rank-wrap">
     <div class="kicker">명예의 전당</div><div class="sel-title">랭킹</div>
+    <div class="rank-bar">
+      <div class="rank-tabs" id="rankTabs">
+        <button class="rank-tab" data-range="day">일간</button>
+        <button class="rank-tab" data-range="week">주간</button>
+        <button class="rank-tab" data-range="month">월간</button>
+        <button class="rank-tab on" data-range="all">전체</button>
+      </div>
+      <div class="rank-meta" id="rankMeta"></div>
+    </div>
     <div class="rank-cols">
       <div class="rank-col">
         <div class="rank-cap">싱글 플레이</div>
         <div class="rank-panel">
-          <div class="rank-head"><span>순위</span><span>이름</span><span>캐릭터</span><span>웨이브</span><span>점수</span></div>
+          <div class="rank-head"><span>순위</span><span>이름</span><span>웨이브</span><span>플레이</span><span>날짜</span><span>점수</span></div>
           <div class="rank-list" id="rankListSolo"><div class="rank-empty">불러오는 중…</div></div>
         </div>
       </div>
       <div class="rank-col">
         <div class="rank-cap coop">협동 플레이</div>
-        <div class="rank-panel">
-          <div class="rank-head"><span>순위</span><span>팀</span><span>캐릭터</span><span>웨이브</span><span>점수</span></div>
+        <div class="rank-panel team">
+          <div class="rank-head"><span>순위</span><span>팀</span><span>웨이브</span><span>플레이</span><span>날짜</span><span>점수</span></div>
           <div class="rank-list" id="rankListCoop"><div class="rank-empty">불러오는 중…</div></div>
         </div>
       </div>
@@ -1109,14 +1242,54 @@
   </div>
 </div>
 
+<!-- ═════════ 연습 모드 — 무엇을 할지 고른다 ═════════ -->
+<div class="screen modal-ov hidden" id="scrPractice" style="z-index:64;">
+  <div class="pause-card prac-card">
+    <div class="kicker">연습 모드</div><p class="pz-t">무엇을 해 볼까요?</p>
+    <div class="prac-row">
+      <button class="prac-opt" id="pracTutorial">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4H20v14H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M8 8h8M8 12h6"/></svg>
+        <b>튜토리얼</b><span>발명이와 함께 조작을 하나씩 익힙니다</span>
+      </button>
+      <button class="prac-opt" id="pracPark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l5 7h-3l4 5h-5v6h-2v-6H6l4-5H7z"/></svg>
+        <b>자유 공원</b><span>낮의 공원을 거닐며 쉬어 갑니다</span>
+      </button>
+    </div>
+    <div class="pz-btns"><button class="btn ghost" id="pracBack"><span>뒤로</span></button></div>
+  </div>
+</div>
+
+<!-- ═════════ 튜토리얼 종료 ═════════ -->
+<div class="screen modal-ov hidden" id="scrTutEnd" style="z-index:66;">
+  <div class="pause-card">
+    <div class="kicker">연습 모드</div><p class="pz-t">튜토리얼이 종료되었습니다</p>
+    <p class="pz-s">기본 조작을 모두 익혔습니다. 이제 실전으로 가 볼까요?</p>
+    <div class="pz-btns">
+      <button class="btn gold" id="tutRetry"><span>다시하기</span></button>
+      <button class="btn ghost" id="tutHome"><span>메인으로 돌아가기</span></button>
+    </div>
+  </div>
+</div>
+
 <!-- ═════════ 일시정지 (ESC) — 게임이 완전히 멈춘다 ═════════ -->
 <div class="screen modal-ov hidden" id="scrPause" style="z-index:65;">
   <div class="pause-card">
     <div class="kicker">작전 대기</div><p class="pz-t">일시정지</p>
     <p class="pz-s" id="pauseMsg">게임이 멈춰 있습니다.</p>
+    <div class="sens">
+      <div class="sens-t">마우스 감도</div>
+      <div class="sens-row">
+        <div class="sens-track"><span></span><span></span><span></span><span></span><span></span></div>
+        <input class="sens-range" id="sensRange" type="range" min="0" max="4" step="1" value="2"
+               aria-label="마우스 감도">
+      </div>
+      <div class="sens-lab"><span>느리게</span><span class="mid">기본</span><span>빠르게</span></div>
+    </div>
     <div class="pz-btns">
       <button class="btn gold" id="pResume"><span>게임으로 돌아가기</span></button>
       <button class="btn ghost" id="pQuit"><span>그만하고 결과 보기</span></button>
+      <button class="btn ghost hidden" id="pLeave"><span>공원 나가기</span></button>
     </div>
   </div>
 </div>
@@ -2503,6 +2676,265 @@
     window.__merge={merged:list.length, made:made.length};
   })();
 
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  자유 공원 — 전투 맵과 별개의 두 번째 월드
+  //   · 전투 맵 조각은 arenaGroup 에, 공원은 PARK.group 에 담아 visible 만 바꾼다.
+  //   · 충돌은 배열 내용을 통째로 갈아 끼운다 (blockedAt · 미니맵이 colliders 를 참조하므로).
+  //   · 나무 · 울타리 · 가로등처럼 수가 많은 것은 InstancedMesh 로 묶어 드로우콜을 줄인다.
+  // ═══════════════════════════════════════════════════════════════════════════
+  const arenaGroup=new THREE.Group(); arenaGroup.userData.keep=true;
+  scene.children.slice(DECOR_START).forEach(o=>arenaGroup.add(o)); scene.add(arenaGroup);
+  const ARENA_COLL=colliders.slice();
+  const PARK={group:null, coll:[], built:false,
+              spawns:[[0,21],[-4,19],[4,19],[-8,22],[8,22],[0,16],[-3,24],[3,24]]};
+
+  function buildPark(){
+    if(PARK.built) return; PARK.built=true;
+    const R=pxRand(7777);
+    const G=new THREE.Group(); G.visible=false; G.userData.keep=true; scene.add(G); PARK.group=G;
+    const pc=(cx,cy,cz,w,h,d)=>PARK.coll.push({minx:cx-w/2,maxx:cx+w/2,miny:cy,maxy:cy+h,minz:cz-d/2,maxz:cz+d/2});
+    const add=(m,x,y,z)=>{ if(x!=null) m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; G.add(m); return m; };
+    const m4=new THREE.Matrix4(), q=new THREE.Quaternion(), e=new THREE.Euler(), sc=new THREE.Vector3(), ps=new THREE.Vector3(), col=new THREE.Color();
+    const inst=(geo,mat,list,fn)=>{ const im=new THREE.InstancedMesh(geo,mat,list.length);
+      list.forEach((it,i)=>{ fn(it,i); m4.compose(ps,q,sc); im.setMatrixAt(i,m4); });
+      im.castShadow=true; im.receiveShadow=true; im.frustumCulled=false; G.add(im); return im; };
+
+    // ── 잔디 바닥: 초록 바탕에 결 · 밟혀 누런 자리 · 클로버 점 ──
+    const grassTex=pxTex(512,512,731,(x,R2,W,H)=>{
+      x.fillStyle='#6a9e3f'; x.fillRect(0,0,W,H);
+      const wrap=fn=>{ for(const ox of [-W,0,W]) for(const oy of [-H,0,H]) fn(ox,oy); };
+      for(let j=0;j<40;j++){ const cx=R2()*W, cy=R2()*H, rr=40+R2()*130, a=.06+R2()*.10, warm=R2()<.45;
+        wrap((ox,oy)=>{ const g=x.createRadialGradient(cx+ox,cy+oy,0,cx+ox,cy+oy,rr);
+          g.addColorStop(0, warm?'rgba(196,176,80,'+a+')':'rgba(46,96,36,'+a+')'); g.addColorStop(1,'rgba(0,0,0,0)');
+          x.fillStyle=g; x.fillRect(cx+ox-rr,cy+oy-rr,rr*2,rr*2); }); }
+      for(let j=0;j<14000;j++){ const v=R2(); x.fillStyle= v<.45?'rgba(40,80,28,'+(.12+R2()*.22)+')' : v<.9?'rgba(150,200,90,'+(.10+R2()*.2)+')':'rgba(230,220,120,'+(.15+R2()*.2)+')';
+        const bx=R2()*W, by=R2()*H; x.fillRect(bx,by,1,1+((R2()*2)|0)); }
+      for(let j=0;j<900;j++){ x.fillStyle='rgba(120,170,70,'+(.25+R2()*.3)+')'; x.fillRect(R2()*W,R2()*H,2,1); }
+    });
+    grassTex.repeat.set(220/10,220/10);
+    const lawn=new THREE.Mesh(new THREE.PlaneGeometry(220,220),
+      new THREE.MeshLambertMaterial({map:grassTex, color:0xcfe1bb, emissive:0x0e2408, emissiveIntensity:.10}));
+    lawn.rotation.x=-Math.PI/2; lawn.receiveShadow=true; G.add(lawn);
+    //  가운데 잔디는 사람들이 많이 밟아 누렇게 (사진의 마당)
+    const wornTex=(()=>{ const cv=document.createElement('canvas'); cv.width=cv.height=256; const x=cv.getContext('2d');
+      const g=x.createRadialGradient(128,128,10,128,128,128); g.addColorStop(0,'rgba(214,196,110,.62)'); g.addColorStop(.55,'rgba(214,196,110,.38)'); g.addColorStop(1,'rgba(214,196,110,0)');
+      x.fillStyle=g; x.fillRect(0,0,256,256);
+      const R3=pxRand(88); for(let j=0;j<1500;j++){ const px=R3()*256, py=R3()*256, d=Math.hypot(px-128,py-128); if(d>124) continue; x.fillStyle='rgba(120,150,60,'+(.18*(1-d/124))+')'; x.fillRect(px,py,2,1); }
+      const t=new THREE.CanvasTexture(cv); t.wrapS=t.wrapT=THREE.ClampToEdgeWrapping; return t; })();
+    //  누런 자리는 호수 둘레 잔디에만 희미하게 (가운데는 호수)
+    const worn=new THREE.Mesh(new THREE.PlaneGeometry(40,30), new THREE.MeshLambertMaterial({map:wornTex, transparent:true, opacity:.55, depthWrite:false}));
+    worn.rotation.x=-Math.PI/2; worn.position.set(0,.012,-2.5); worn.renderOrder=1; G.add(worn);
+
+    // ── 산책로: 잔디 마당을 도는 타원 고리 + 남쪽 입구 광장 + 진입로 ──
+    const pathTex=pxTex(256,256,412,(x,R2,W,H)=>{
+      x.fillStyle='#b9b0a0'; x.fillRect(0,0,W,H);
+      for(let j=0;j<6000;j++){ x.fillStyle=R2()<.5?'rgba(80,72,62,'+(.08+R2()*.14)+')':'rgba(240,235,225,'+(.08+R2()*.14)+')'; x.fillRect(R2()*W,R2()*H,1,1); }
+      x.strokeStyle='rgba(70,62,54,.22)'; x.lineWidth=2;
+      for(let v=0;v<=W;v+=64){ x.beginPath(); x.moveTo(v,0); x.lineTo(v,H); x.stroke(); x.beginPath(); x.moveTo(0,v); x.lineTo(W,v); x.stroke(); }
+      for(let j=0;j<40;j++){ x.fillStyle='rgba(60,54,48,.10)'; x.fillRect(R2()*W,R2()*H,3+R2()*8,2+R2()*4); }
+    });
+    pathTex.repeat.set(1.2,1.2);
+    const pathMat=new THREE.MeshLambertMaterial({map:pathTex, color:0xc9c0b0});
+    const PA=20.5, PB=16.5, PZ=-.5, SEG=44;                     // 타원 반지름 · 중심 z · 분할
+    for(let i=0;i<SEG;i++){
+      const a0=i/SEG*Math.PI*2, a1=(i+1)/SEG*Math.PI*2, am=(a0+a1)/2;
+      const x0=Math.cos(a0)*PA, z0=PZ+Math.sin(a0)*PB, x1=Math.cos(a1)*PA, z1=PZ+Math.sin(a1)*PB;
+      const len=Math.hypot(x1-x0,z1-z0)+.25;
+      const s=new THREE.Mesh(new THREE.BoxGeometry(len,.07,3.2), pathMat);
+      s.position.set((x0+x1)/2,.035,(z0+z1)/2); s.rotation.y=-Math.atan2(z1-z0,x1-x0);
+      s.receiveShadow=true; G.add(s);
+    }
+    const plaza=new THREE.Mesh(new THREE.CylinderGeometry(5.2,5.2,.08,40), pathMat);   // 남쪽 입구 광장
+    plaza.position.set(0,.04,24.5); plaza.receiveShadow=true; G.add(plaza);
+    [[0,.04,20.2, 3.2,.07,4.4],[0,.04,29.0, 3.2,.07,3.4],[-24,.04,-.5, 8,.07,3.2],[24,.04,-.5, 8,.07,3.2]].forEach(([x,y,z,w,h,d])=>{
+      const s=new THREE.Mesh(new THREE.BoxGeometry(w,h,d), pathMat); s.position.set(x,y,z); s.receiveShadow=true; G.add(s); });
+    //  광장 한가운데 둥근 화단
+    const bedMat=M(0x5a3d26), leafM=M(0x3f7a33);
+    const bed=new THREE.Mesh(new THREE.CylinderGeometry(1.9,2.0,.42,28), bedMat); bed.position.set(0,.21,24.5); add(bed); pc(0,0,24.5,3.9,.5,3.9);
+    const bedRim=new THREE.Mesh(new THREE.TorusGeometry(1.95,.12,8,36), M(0xd9d2c4)); bedRim.rotation.x=Math.PI/2; bedRim.position.set(0,.42,24.5); G.add(bedRim);
+    const FL=[0xff5a5a,0xffd24d,0xff8ad0,0xffffff,0xb48cff,0xff9a3c];
+    for(let i=0;i<22;i++){ const a=R()*6.28, r=R()*1.5; const st=new THREE.Mesh(new THREE.CylinderGeometry(.02,.02,.32,5), leafM);
+      st.position.set(Math.cos(a)*r,.58,24.5+Math.sin(a)*r); G.add(st);
+      const fh=sph(.09, M(FL[(R()*FL.length)|0],{emissive:0x332211,emissiveIntensity:.2}), 8,6); fh.position.set(st.position.x,.76,st.position.z); G.add(fh); }
+
+    // ── 경계: 낮은 회양목 울타리 (안쪽 x ±28, z -28 ~ 30) ──
+    const hedgeGeo=roundBoxGeo(3.9,1.05,.9,.22,0);
+    const hedgeMat=M(0x2f6b34,{emissive:0x0a1f0c,emissiveIntensity:.25});
+    const hedges=[];
+    for(let x=-26;x<=26;x+=4){ hedges.push([x,-28.3,0]); hedges.push([x,30.3,0]); }
+    for(let z=-26;z<=28;z+=4){ hedges.push([-28.3,z,1]); hedges.push([28.3,z,1]); }
+    inst(hedgeGeo,hedgeMat,hedges,([x,z,rot])=>{ e.set(0,rot?Math.PI/2:0,0); q.setFromEuler(e); const s2=.97+R()*.08; sc.set(s2,s2*(.9+R()*.25),s2); ps.set(x,.52,z); });
+    hedges.forEach(([x,z,rot])=>{ if(rot) pc(x,0,z,.9,1.05,3.9); else pc(x,0,z,3.9,1.05,.9); });
+
+    // ── 나무 ──
+    //  소나무: 줄기 + 층층 원뿔 3개 / 활엽수: 줄기 + 잎 덩어리 — 사진처럼 소나무가 많고, 활엽수 일부는 가을빛
+    const inEllipse=(x,z,a,b)=>((x*x)/(a*a)+((z-PZ)*(z-PZ))/(b*b))<1;
+    const trees=[];   // [x,z,scale,kind(0 pine/1 broad),autumn]
+    const farFrom=(x,z,d)=>trees.every(t=>Math.hypot(t[0]-x,t[1]-z)>d);
+    //  안쪽 띠: 산책로 바깥 ~ 울타리 안쪽
+    let guard=0;
+    while(trees.length<30 && guard++<900){
+      const x=-26.5+R()*53, z=-26.5+R()*55.5;
+      if(inEllipse(x,z,PA+2.4,PB+2.4)) continue;
+      if(Math.abs(x)<3.2 && z>18) continue;                        // 진입로
+      if(!farFrom(x,z,3.6)) continue;
+      const pine=R()<.62;
+      trees.push([x,z,(pine? 1.1:1.0)+R()*.5, pine?0:1, !pine && R()<.35]);
+    }
+    //  마당 가장자리 안쪽에 큰 나무 몇 그루 (그늘)
+    [[-13,-9],[12,-11],[-11,8],[14,7]].forEach(([x,z])=>{ if(farFrom(x,z,4)) trees.push([x,z,1.55+R()*.35,1,R()<.3]); });
+    const inner=trees.length;
+    //  바깥 숲: 울타리 너머 빽빽하게 — 뒤쪽 건물이 나무 사이로 보이게
+    guard=0;
+    while(trees.length<inner+110 && guard++<3000){
+      const a=R()*Math.PI*2, r=32+R()*30, x=Math.cos(a)*r, z=1+Math.sin(a)*r*.95;
+      if(Math.abs(x)<4.5 && z>28) continue;                        // 남쪽 입구 시야
+      if(!farFrom(x,z,3.2)) continue;
+      const pine=R()<.7;
+      trees.push([x,z,(pine? 1.3:1.2)+R()*.9, pine?0:1, !pine && R()<.4]);
+    }
+    trees.slice(0,inner).forEach(([x,z,s])=>pc(x,0,z,.7*s,4,.7*s));
+    const barkMat=new THREE.MeshLambertMaterial({color:0x6b4a2e, map:crateTex});
+    const trunkGeo=new THREE.CylinderGeometry(.17,.27,3.0,7); trunkGeo.translate(0,1.5,0);
+    inst(trunkGeo,barkMat,trees,([x,z,s,k])=>{ e.set(0,R()*6.28,0); q.setFromEuler(e); sc.set(s,s*(k?0.9:1.25),s); ps.set(x,0,z); });
+    //  소나무 원뿔 — 층마다 조금씩 작아지며 위로
+    const pines=trees.filter(t=>t[3]===0), cones=[];
+    pines.forEach(([x,z,s])=>{ for(let l=0;l<3;l++) cones.push([x,z,s,l]); });
+    const coneGeo=new THREE.ConeGeometry(1,1,9);
+    const pineMat=new THREE.MeshLambertMaterial({color:0xffffff});
+    const PC=[0x2e6b3b,0x33754a,0x2a6238,0x3b7d4a];
+    const pineIm=inst(coneGeo,pineMat,cones,([x,z,s,l],i)=>{ const rr=(1.75-l*.38)*s, hh=(2.1-l*.25)*s, y=3.0*1.25*s*.62+l*1.05*s;
+      e.set(0,R()*6.28,0); q.setFromEuler(e); sc.set(rr,hh,rr); ps.set(x,y,z); });
+    cones.forEach((c,i)=>pineIm.setColorAt(i, col.setHex(PC[(R()*PC.length)|0]).offsetHSL(0,0,c[3]*.035+(R()-.5)*.03)));
+    if(pineIm.instanceColor) pineIm.instanceColor.needsUpdate=true;
+    //  활엽수 잎 덩어리
+    const broad=trees.filter(t=>t[3]===1), blobs=[];
+    broad.forEach(([x,z,s,k,au])=>{ const n=4+((R()*3)|0), top=2.7*s;
+      blobs.push([x,z,top+.6*s,0,0,1.25*s,au]);
+      for(let j=1;j<n;j++){ const a=j/n*Math.PI*2+R(), rr=(.55+R()*.5)*s; blobs.push([x,z,top+(.1+R()*.9)*s,Math.cos(a)*rr,Math.sin(a)*rr,(.7+R()*.4)*s,au]); } });
+    const leafGeo=new THREE.IcosahedronGeometry(1,1);
+    const leafMat=new THREE.MeshLambertMaterial({color:0xffffff});
+    const GC=[0x4f8a3a,0x5c9a44,0x447a34,0x6aa24e], AC=[0xd98a2b,0xc9a227,0xb85c2a,0xe0a33a];
+    const leafIm=inst(leafGeo,leafMat,blobs,([x,z,y,ox,oz,r])=>{ e.set(R()*3,R()*3,R()*3); q.setFromEuler(e); sc.set(r*(.95+R()*.2),r*(.8+R()*.2),r*(.95+R()*.2)); ps.set(x+ox,y,z+oz); });
+    blobs.forEach((b,i)=>leafIm.setColorAt(i, col.setHex((b[6]?AC:GC)[(R()*4)|0]).offsetHSL((R()-.5)*.03,0,(R()-.5)*.06)));
+    if(leafIm.instanceColor) leafIm.instanceColor.needsUpdate=true;
+    //  나무 밑 그늘 — 옅은 어두운 원
+    const shadeTex=(()=>{ const cv=document.createElement('canvas'); cv.width=cv.height=128; const x=cv.getContext('2d');
+      const g=x.createRadialGradient(64,64,4,64,64,64); g.addColorStop(0,'rgba(20,50,16,.36)'); g.addColorStop(1,'rgba(20,50,16,0)'); x.fillStyle=g; x.fillRect(0,0,128,128);
+      const t=new THREE.CanvasTexture(cv); t.wrapS=t.wrapT=THREE.ClampToEdgeWrapping; return t; })();
+    const shadeMat=new THREE.MeshLambertMaterial({map:shadeTex, transparent:true, depthWrite:false});
+    const shadeGeo=new THREE.PlaneGeometry(1,1); shadeGeo.rotateX(-Math.PI/2);
+    inst(shadeGeo,shadeMat,trees.slice(0,inner),([x,z,s])=>{ e.set(0,0,0); q.setFromEuler(e); const d=4.6*s; sc.set(d,1,d); ps.set(x,.015,z); }).castShadow=false;
+
+    // ── 벤치 · 휴지통 · 볼라드 조명 — 산책로 바깥쪽을 따라 ──
+    const woodM=M(0x9a6a3c), ironM=M(0x3a3f47);
+    const benchAt=(a)=>{
+      const x=Math.cos(a)*(PA+2.6), z=PZ+Math.sin(a)*(PB+2.6), yaw=-Math.atan2(Math.sin(a)*PB, Math.cos(a)*PA)+Math.PI/2;
+      const g=new THREE.Group(); g.position.set(x,0,z); g.rotation.y=yaw+Math.PI;      // 마당 쪽을 본다
+      [-.24,0,.24].forEach(off=>{ const s=box(1.8,.06,.2,woodM); s.position.set(0,.46,off); s.castShadow=true; g.add(s); });
+      [.62,.84].forEach(y=>{ const s=box(1.8,.06,.18,woodM); s.position.set(0,y,-.34); s.rotation.x=-.25; s.castShadow=true; g.add(s); });
+      [-.75,.75].forEach(ox=>{ const l=box(.08,.46,.6,ironM); l.position.set(ox,.23,0); g.add(l);
+        const b=box(.08,.5,.08,ironM); b.position.set(ox,.62,-.36); b.rotation.x=-.25; g.add(b); });
+      G.add(g); pc(x,0,z,1.9,.9,1.9);
+      return {x,z,yaw};
+    };
+    const benches=[.55,1.35,2.15,3.0,3.85,4.65,5.5].map(benchAt);
+    benches.forEach((b,i)=>{ if(i%2) return;
+      const bx=b.x+Math.cos(b.yaw)*1.5, bz=b.z-Math.sin(b.yaw)*1.5;
+      const bin=new THREE.Mesh(new THREE.CylinderGeometry(.3,.27,.82,12), M(0x2f5f3a)); bin.position.set(bx,.41,bz); add(bin); pc(bx,0,bz,.6,.85,.6);
+      const lid=new THREE.Mesh(new THREE.CylinderGeometry(.32,.32,.08,12), ironM); lid.position.set(bx,.86,bz); G.add(lid); });
+    //  볼라드 조명 — 낮이라 켜지지 않는다. 길 안쪽 가장자리를 따라
+    const bollards=[]; for(let i=0;i<12;i++){ const a=i/12*Math.PI*2+.13; bollards.push([Math.cos(a)*(PA-2.2), PZ+Math.sin(a)*(PB-2.2)]); }
+    const bolGeo=new THREE.CylinderGeometry(.09,.11,1.0,8); bolGeo.translate(0,.5,0);
+    inst(bolGeo,ironM,bollards,([x,z])=>{ e.set(0,0,0); q.setFromEuler(e); sc.set(1,1,1); ps.set(x,0,z); });
+    const capGeo=new THREE.CylinderGeometry(.13,.13,.12,8);
+    inst(capGeo,M(0xe9e2cf,{emissive:0x6a6250,emissiveIntensity:.35}),bollards,([x,z])=>{ e.set(0,0,0); q.setFromEuler(e); sc.set(1,1,1); ps.set(x,1.02,z); }).castShadow=false;
+    bollards.forEach(([x,z])=>pc(x,0,z,.24,1.0,.24));
+    //  키 큰 가로등 4개 — 광장과 마당 모서리
+    [[-6.5,22.5],[6.5,22.5],[-17,-18],[17,-18]].forEach(([x,z])=>{
+      const pole=new THREE.Mesh(new THREE.CylinderGeometry(.08,.11,4.2,8), ironM); pole.position.set(x,2.1,z); add(pole); pc(x,0,z,.24,4.2,.24);
+      const arm=box(.9,.08,.08,ironM); arm.position.set(x+.4,4.15,z); G.add(arm);
+      const lamp=new THREE.Mesh(new THREE.SphereGeometry(.22,10,8), M(0xf1ecdc,{emissive:0x55503f,emissiveIntensity:.35})); lamp.position.set(x+.85,4.05,z); G.add(lamp);
+    });
+
+    // ── 마당: 돗자리 · 피크닉 바구니 · 공 · 바위 ──
+    const MATS=[[0x3b6fd6,0xdfe8ff],[0xd64a4a,0xffe0e0],[0xf0c14b,0x5a4a1a],[0x9b5cd6,0xf0e4ff],[0x3fa66a,0xe6fff0]];
+    [[-13,-4,.4],[12,-2,-.3],[-8,8,1.1],[-14,4,.6],[10,-9,-.8]].forEach(([x,z,ry],i)=>{
+      const [c1,c2]=MATS[i%MATS.length];
+      const mat=new THREE.Mesh(roundBoxGeo(2.1,.04,1.6,.02,0), M(c1)); mat.position.set(x,.03,z); mat.rotation.y=ry; mat.receiveShadow=true; G.add(mat);
+      const stripe=box(2.1,.045,.28,M(c2)); stripe.position.set(x,.032,z); stripe.rotation.y=ry; G.add(stripe);
+      const bk=new THREE.Mesh(roundBoxGeo(.5,.36,.34,.05,0), M(0xb08a52)); bk.position.set(x+Math.cos(ry)*.7,.2,z-Math.sin(ry)*.7); add(bk);
+      const hd=new THREE.Mesh(new THREE.TorusGeometry(.18,.03,6,14,Math.PI), M(0x8a6a3c)); hd.position.set(bk.position.x,.38,bk.position.z); G.add(hd);
+      [[.35,.2],[-.3,.4]].forEach(([ox,oz])=>{ const cup=new THREE.Mesh(new THREE.CylinderGeometry(.06,.05,.12,8), M(0xffffff)); cup.position.set(x+ox,.1,z+oz); G.add(cup); });
+    });
+    const ball=new THREE.Mesh(new THREE.SphereGeometry(.24,14,12), M(0xffffff)); ball.position.set(-4.5,.24,10.5); add(ball);
+    const band=new THREE.Mesh(new THREE.TorusGeometry(.24,.05,6,20), M(0xd64a4a)); band.rotation.x=.4; band.position.copy(ball.position); G.add(band);
+    const frisbee=new THREE.Mesh(new THREE.CylinderGeometry(.34,.3,.05,20), M(0xff8c1a)); frisbee.position.set(-10,.03,-10); G.add(frisbee);
+    const rockM=M(0x8b9096);
+    [[-19,-4,1.3],[20,10,1.0],[-16,16,.9],[21,-7,1.1]].forEach(([x,z,s])=>{ const r=new THREE.Mesh(new THREE.IcosahedronGeometry(1,1), rockM); r.scale.set(s*1.3,s*.75,s); r.position.set(x,s*.5,z); r.rotation.set(R(),R()*3,R()); add(r); pc(x,0,z,2.2*s,1.2*s,1.7*s); });
+
+    // ── 호수: 마당 한가운데 타원 연못 + 나무 울타리(들어갈 수 없다) ──
+    const LX=0, LZ=-3, LA=8.5, LB=5.5;                          // 중심 · 반지름(x, z)
+    const ellipseGeo=(rx,rz,segs)=>{ const g=new THREE.CircleGeometry(1,segs||64); g.scale(rx,rz,1); g.rotateX(-Math.PI/2); return g; };
+    const ringGeo=(rx0,rz0,rx1,rz1,segs)=>{ const sh=new THREE.Shape(); sh.absellipse(0,0,rx1,rz1,0,Math.PI*2,false,0);
+      const hole=new THREE.Path(); hole.absellipse(0,0,rx0,rz0,0,Math.PI*2,true,0); sh.holes.push(hole);
+      const g=new THREE.ShapeGeometry(sh,segs||64); g.rotateX(-Math.PI/2); return g; };
+    //  모래 기슭 → 진흙 테 → 물
+    const shore=new THREE.Mesh(ringGeo(LA-.2,LB-.2,LA+1.5,LB+1.3), M(0xd9caa2)); shore.position.set(LX,.015,LZ); shore.receiveShadow=true; G.add(shore);
+    const mud=new THREE.Mesh(ringGeo(LA-.9,LB-.7,LA+.05,LB+.05), M(0x8a7a55)); mud.position.set(LX,.02,LZ); G.add(mud);
+    const deep=new THREE.Mesh(ellipseGeo(LA-.3,LB-.3), M(0x1d4a5e)); deep.position.set(LX,.025,LZ); G.add(deep);
+    const waterTex=pxTex(256,256,515,(x,R2,W,H)=>{
+      x.fillStyle='rgba(120,190,230,1)'; x.fillRect(0,0,W,H);
+      for(let j=0;j<70;j++){ const cx=R2()*W, cy=R2()*H, rr=6+R2()*22; x.strokeStyle='rgba(255,255,255,'+(.10+R2()*.25)+')'; x.lineWidth=1+R2()*1.5;
+        x.beginPath(); x.ellipse(cx,cy,rr,rr*.35,0,0,Math.PI*2); x.stroke(); }
+      for(let j=0;j<1500;j++){ x.fillStyle='rgba(255,255,255,'+(.05+R2()*.15)+')'; x.fillRect(R2()*W,R2()*H,2,1); }
+    });
+    waterTex.repeat.set(3,2);
+    const water=new THREE.Mesh(ellipseGeo(LA,LB,72), new THREE.MeshPhongMaterial({map:waterTex, color:0x5fb3e0, transparent:true, opacity:.72, shininess:90, specular:0xffffff, depthWrite:false}));
+    water.position.set(LX,.06,LZ); water.renderOrder=2; G.add(water); PARK.water=water;
+    //  연잎 · 갈대 · 기슭 바위
+    const padM=M(0x3f8a3a), padGeo=new THREE.CircleGeometry(.32,10); padGeo.rotateX(-Math.PI/2);
+    const pads=[]; for(let i=0;i<14;i++){ const a=R()*6.28, r=.55+R()*.4; pads.push([LX+Math.cos(a)*LA*r, LZ+Math.sin(a)*LB*r, R()*6.28, .7+R()*.6]); }
+    inst(padGeo,padM,pads,([x,z,ry,s])=>{ e.set(0,ry,0); q.setFromEuler(e); sc.set(s,1,s); ps.set(x,.075,z); }).castShadow=false;
+    [[.2],[.65],[1.1]].forEach(([k],i)=>{ const p=pads[i]; const fl=sph(.1, M(0xffb0d0,{emissive:0x442233,emissiveIntensity:.25}),8,6); fl.position.set(p[0],.14,p[1]); G.add(fl); });
+    const reedGeo=new THREE.CylinderGeometry(.025,.035,1.5,5); reedGeo.translate(0,.75,0);
+    const reeds=[]; for(let i=0;i<46;i++){ const a=R()*6.28, r=1.0+R()*.07; reeds.push([LX+Math.cos(a)*(LA+.35)*r, LZ+Math.sin(a)*(LB+.35)*r, (R()-.5)*.35, (R()-.5)*.35, .8+R()*.5]); }
+    inst(reedGeo,M(0x6f8f3a),reeds,([x,z,tx,tz,h])=>{ e.set(tx,0,tz); q.setFromEuler(e); sc.set(1,h,1); ps.set(x,0,z); });
+    const tipGeo=new THREE.CylinderGeometry(.05,.05,.28,6);
+    inst(tipGeo,M(0x6b4a2a),reeds,([x,z,tx,tz,h])=>{ e.set(tx,0,tz); q.setFromEuler(e); sc.set(1,1,1); ps.set(x-Math.sin(tz)*1.5*h*0, 1.5*h-.1, z); }).castShadow=false;
+    [[-.5,.9,1.1],[1.2,-.85,.9],[2.6,.55,.8],[-2.2,-.6,1.0]].forEach(([ax,az,sz])=>{ const x=LX+ax*LA*.42+Math.sign(ax)*LA*.6, z=LZ+az*LB*1.05;
+      const r=new THREE.Mesh(new THREE.IcosahedronGeometry(.6,1), rockM); r.scale.set(sz*1.2,sz*.6,sz); r.position.set(x,sz*.2,z); r.rotation.set(R(),R()*3,R()); add(r); });
+    //  울타리: 낮은 나무 기둥 + 가로대 두 줄, 호수를 한 바퀴 (충돌은 조각마다 AABB)
+    const FA=LA+2.4, FB=LB+2.2, FN=40, fenceM=M(0x8a6238), postM=M(0x6e4a28);
+    const postGeo=new THREE.BoxGeometry(.16,1.0,.16); postGeo.translate(0,.5,0);
+    const posts=[]; for(let i=0;i<FN;i++){ const a=i/FN*Math.PI*2; posts.push([LX+Math.cos(a)*FA, LZ+Math.sin(a)*FB]); }
+    inst(postGeo,postM,posts,([x,z])=>{ e.set(0,0,0); q.setFromEuler(e); sc.set(1,1,1); ps.set(x,0,z); });
+    for(let i=0;i<FN;i++){
+      const [x0,z0]=posts[i], [x1,z1]=posts[(i+1)%FN]; const len=Math.hypot(x1-x0,z1-z0), yaw=-Math.atan2(z1-z0,x1-x0);
+      [.45,.85].forEach(y=>{ const r=box(len,.08,.06,fenceM); r.position.set((x0+x1)/2,y,(z0+z1)/2); r.rotation.y=yaw; r.castShadow=true; G.add(r); });
+      const minx=Math.min(x0,x1)-.2, maxx=Math.max(x0,x1)+.2, minz=Math.min(z0,z1)-.2, maxz=Math.max(z0,z1)+.2;
+      PARK.coll.push({minx,maxx,miny:0,maxy:1.0,minz,maxz});
+    }
+    // ── 멀리: 나무 너머로 보이는 아파트 단지 (사진의 스카이라인) ──
+    const TW=[[-66,-84,14,54,'#b9bec8'],[-38,-96,13,60,'#c4c2bb'],[-10,-104,15,48,'#b3b8c2'],[20,-100,13,64,'#c9c7c0'],[50,-90,14,52,'#b8bcc5'],[76,-66,12,46,'#c3c0b8'],[-88,-52,13,50,'#bcc0c7'],[94,-28,12,42,'#c1bfb7'],[-96,-10,12,44,'#b7bcc5']];
+    TW.forEach(([x,z,w,h,bg])=>{
+      const b=facadeBox(w,h,w*.9,{pattern:'grid', bg:bg, win:'#3d4a5e', win2:'#6f7f96', hi:'#eef1f5', line:'#9a9ea6', floorH:2.9, bayW:2.2, top:0x8f949c, cell:12});
+      b.position.set(x,h/2,z); b.rotation.y=Math.atan2(x,-z)*.3; b.traverse(o=>{ if(o.isMesh){ o.castShadow=false; o.receiveShadow=false; } }); G.add(b);
+    });
+    window.__park={trees:trees.length, inner, coll:PARK.coll.length};
+  }
+
+  //  월드 전환 — 보이는 것 · 충돌 · 미니맵을 한 번에 바꾼다
+  function setWorld(mode){
+    const park = mode==='park';
+    if(park) buildPark();
+    arenaGroup.visible=!park;
+    if(PARK.group) PARK.group.visible=park;
+    colliders.length=0; (park? PARK.coll : ARENA_COLL).forEach(c=>colliders.push(c));
+    MM.cv=null; MM.bg=null;                       // 미니맵 배경은 다음 그리기 때 새 콜라이더로 다시 만든다
+  }
+
   // 부드러운 채움광 — 그림자가 지나치게 새까맣게 떨어지던 것을 완화
   const fillLight=new THREE.DirectionalLight(0xbcd2ff,.3);
   fillLight.position.set(-34,26,-22); scene.add(fillLight);
@@ -3602,11 +4034,13 @@
   const BGM_BATTLE=['battle_1.mp3','battle_2.mp3'];          // 전투 음악 1 · 2 — 판마다 무작위로 하나를 골라 반복
   const BGM_WIN='result_win.mp3', BGM_LOSE='result_lose.mp3';  // 결과 — 3분 안에 성공 / 실패(시간 종료 · 중도 종료)
   const BGM_RESULT=BGM_LOSE;
+  const BGM_PARK='park.mp3', BGM_TUTORIAL='tutorial.mp3';   // 자유 공원 · 튜토리얼 — 각각 한 곡 반복 (없으면 메인 음악)
   const BGM=(()=>{
     const VOL=.42, RESULT_VOL=.4;
     const battle=new Audio(); battle.preload='auto'; battle.loop=true;   // 고른 곡을 그 판 내내 반복
     const result=new Audio(); result.preload='auto'; result.loop=true;
     const menu=new Audio('bgm/'+BGM_MENU); menu.preload='auto'; menu.loop=true;
+    const amb=new Audio(); amb.preload='auto'; amb.loop=true; let ambFile='', ambOn=false;   // 공원 · 튜토리얼
     const MENU_VOL=.38;
     let menuWanted=false, resultFile='';
     const missing=new Set();                     // 없는 파일은 한 번 실패하면 다시 시도하지 않는다
@@ -3638,17 +4072,18 @@
     });
     result.addEventListener('error', ()=>{ if(resultFile) missing.add(resultFile); });
     menu.addEventListener('error', ()=>{ missing.add(BGM_MENU); });
+    amb.addEventListener('error', ()=>{ if(ambFile) missing.add(ambFile); ambOn=false; ambFile=''; BGM.menu(); });   // 파일이 없으면 메인 음악으로
     return {
       start(){                                   // 전투 시작 — 무작위로 고른 한 곡을 처음부터 (그 판 내내 반복)
         clearFade(); result.pause(); menuWanted=false; menu.pause();
         active=true; tries=0;
         playBattle();
       },
-      pause(){ if(active) battle.pause(); },
-      resume(){ if(active){ battle.muted=SFX.isMuted(); safePlay(battle); } },
+      pause(){ if(active) battle.pause(); if(ambOn) amb.pause(); },
+      resume(){ if(active){ battle.muted=SFX.isMuted(); safePlay(battle); } if(ambOn){ amb.muted=SFX.isMuted(); safePlay(amb); } },
       stop(){                                    // 전부 정지 (메뉴로 나가기 · 다시 도전)
-        clearFade(); active=false; menuWanted=false;
-        battle.pause(); result.pause(); menu.pause();
+        clearFade(); active=false; menuWanted=false; ambOn=false;
+        battle.pause(); result.pause(); menu.pause(); amb.pause();
         try{ menu.currentTime=0; battle.currentTime=0; }catch(e){}
         try{ result.currentTime=0; }catch(e){}
         battle.volume=VOL;
@@ -3673,14 +4108,23 @@
       },
       menu(){                                    // 메인 음악 — 이미 나오고 있으면 이어서 (화면을 오가도 끊기지 않게)
         menuWanted=true;
-        if(missing.has(BGM_MENU) || active || !result.paused) return;
+        if(missing.has(BGM_MENU) || active || ambOn || !result.paused) return;
         menu.muted=SFX.isMuted(); menu.volume=MENU_VOL;
         if(menu.paused){ try{ menu.currentTime=0; }catch(e){} safePlay(menu); }   // 다시 들어올 때는 항상 처음부터
       },
-      kick(){ if(menuWanted && menu.paused && !active) this.menu(); },   // 브라우저가 첫 입력 전 재생을 막았을 때
-      syncMute(){ battle.muted=result.muted=menu.muted=SFX.isMuted(); },
+      //  공원 · 튜토리얼 곡 — 한 곡을 처음부터 반복. 파일이 없으면 error 핸들러가 메인 음악으로 돌린다
+      scene(file){
+        clearFade(); active=false; battle.pause(); result.pause(); menuWanted=false; menu.pause();
+        if(missing.has(file)){ this.menu(); return; }
+        ambOn=true; if(ambFile!==file){ ambFile=file; amb.src='bgm/'+file; }
+        amb.muted=SFX.isMuted(); amb.volume=MENU_VOL; try{ amb.currentTime=0; }catch(e){} safePlay(amb);
+      },
+      park(){ this.scene(BGM_PARK); },
+      tutorial(){ this.scene(BGM_TUTORIAL); },
+      kick(){ if(menuWanted && menu.paused && !active) this.menu(); if(ambOn && amb.paused) { amb.muted=SFX.isMuted(); safePlay(amb); } },   // 브라우저가 첫 입력 전 재생을 막았을 때
+      syncMute(){ battle.muted=result.muted=menu.muted=amb.muted=SFX.isMuted(); },
       //  상태 확인용 (현재 곡 이름)
-      nowPlaying(){ return active&&cur>=0? BGM_BATTLE[cur] : (!result.paused && !result.error? resultFile : (!menu.paused? BGM_MENU : null)); }
+      nowPlaying(){ return active&&cur>=0? BGM_BATTLE[cur] : ambOn&&!amb.paused? ambFile : (!result.paused && !result.error? resultFile : (!menu.paused? BGM_MENU : null)); }
     };
   })();
   //  첫 입력에서 오디오 잠금 해제
@@ -3796,6 +4240,7 @@
             hitmark(crit?'crit':false);
             spawnDmg(c.x, headY+.55, c.z, dmg, crit);
             landed=true;
+            tutEvent('hit',{crit:crit, e:e});
           }
           applyDamage(e,dmg,attacker,src);
         }
@@ -4131,6 +4576,7 @@
   function applyDamage(e,dmg,attacker,src){
     if(!e.alive || gameState!=='playing') return;
     e.hp-=dmg;
+    if(e.invincible) e.hp=e.maxHp;
     e.hitT=.18;                                   // 피격 움찔(스쿼시)
     //  동료 화면도 같은 타이밍에 움찔하도록 타격 자체를 알린다.
     //  동료가 보고한 피해(attacker==='mate')는 그쪽에서 이미 반응했으므로 되돌려 보내지 않는다.
@@ -4172,6 +4618,7 @@
           relay({k:'kill', id:e.netId, by: mine? 'host':'mate', b:e.isBoss?1:0, sc:score, log:logHtml, uc:upCnt, lv:wlv});
         }
       }
+      if(e.dummy) tutEvent('dummyDead', e);
       if(e.isBoss){ updateBossBar(); }
       updateQuotaHUD();
       checkWaveClear();
@@ -4348,6 +4795,7 @@
   }
   //  할당량을 채웠고 대장도 없으면 다음 웨이브
   function checkWaveClear(){
+    if(isTraining()) return;
     if(isGuest() || gameState!=='playing') return;
     const W=WAVES[wave-1];
     if(waveKills<W.quota) return;
@@ -4381,6 +4829,7 @@
 
   // ═════════ 플레이어 피격 / 부활 ═════════
   function takeHit(dmg,src){
+    if(isPark()) return;
     if(gameState!=='playing'||!playerAlive||invulnT>0) return;
     if(shieldT>0){
       const sf=$('shieldFx'); sf.style.opacity=1;
@@ -4753,7 +5202,7 @@
   function refreshSetup(){
     const nm=$('nickInput').value.trim();
     $('btnToGuide').disabled = nm.length===0;
-    $('btnToGuide').querySelector('span').textContent = (pendingMode==='coop'? '방 고르기' : '다음');
+    $('btnToGuide').querySelector('span').textContent = (pendingMode==='coop'? '방 고르기' : pendingMode==='park'? '공원 입장' : pendingMode==='tutorial'? '튜토리얼 시작' : '다음');
   }
 
   // ═════════ 랭킹 서버 연동 ═════════
@@ -4793,13 +5242,15 @@
     const failTimer=setTimeout(()=>{ if(!settled){ settled=true; onFail&&onFail('서버 응답이 없습니다.'); } }, 6000);
     NET.ws.onopen=()=>{
       NET.connected=true; settled=true; clearTimeout(failTimer);
+      //  무료 호스팅은 HTTP 요청이 15분 없으면 잠든다 — 연결돼 있는 동안 5분마다 가볍게 깨워 둔다
+      if(!NET.keep) NET.keep=setInterval(()=>{ if(NET.connected) fetch(API_BASE+'/api/ping').catch(()=>{}); }, 5*60*1000);
       netSend({t:'hello', name:playerName, char:LOADOUTS[charIdx].name});
       onReady&&onReady();
     };
     NET.ws.onclose=()=>{
       NET.connected=false;
       if(!settled){ settled=true; clearTimeout(failTimer); onFail&&onFail('서버와 연결이 끊겼습니다.'); }
-      else onPeerGone(true);
+      else { if(isPark()){ parkOnline=false; parkClearPeers(); chatLine('서버와 연결이 끊겼습니다. 혼자 있는 공원입니다.','sys'); parkCount(); } onPeerGone(true); }
     };
     NET.ws.onerror=()=>{};
     NET.ws.onmessage=ev=>{ let m; try{ m=JSON.parse(ev.data); }catch(e){ return; } netHandle(m); };
@@ -4808,6 +5259,7 @@
   const relay=d=>netSend({t:'r', d});
 
   function netHandle(m){
+    if(parkNet(m)) return;
     if(m.t==='rooms'){ renderRooms(m.rooms); return; }
     if(m.t==='joined'){
       NET.room=m.room; NET.isHost=m.isHost; NET.peer=m.peer||null;
@@ -4868,7 +5320,8 @@
     lobbyMsg('서버에 연결하는 중…');
     $('roomGrid').innerHTML='';
     netConnect(
-      ()=>{ lobbyMsg('방을 선택하세요.'); netSend({t:'lobby'}); },
+      ()=>{ netSend({t:'hello', name:playerName, char:LOADOUTS[charIdx].name});   // 공원에서 이미 연결돼 있었으면 이름·캐릭터를 갱신
+            lobbyMsg('방을 선택하세요.'); netSend({t:'lobby'}); },
       msg=>{ lobbyMsg(msg+' 멀티 플레이는 서버가 필요합니다.', true); }
     );
   }
@@ -5314,6 +5767,8 @@
     } else {
       for(const e of entities) if(e.team==='red' && e.alive){ const p=e.group.position; dot(p.x,p.z, e.isBoss?4.6:2.8, FOE, e.isBoss?'#ffd9d2':FOE_EDGE); }
     }
+    //  공원 사람들 — 파란 원
+    if(isPark()) for(const [,P] of parkPeers){ const p=P.g.position; dot(p.x,p.z,3.4,'#8fb8ff','#eef4ff'); }
     //  팀원 — 초록 원
     if(isCoop() && NET.peer && NET.mateObj && NET.mate.alive){
       const p=NET.mateObj.position; dot(p.x,p.z,4,'#3ddc84','#eafff2');
@@ -5362,7 +5817,8 @@
         mode: coopRec? 'coop':'solo',
         partner: coopRec? (NET.partnerName||(NET.peer&&NET.peer.name)||'동료') : '',
         name:playerName, character:LOADOUTS[charIdx].name, score, wave:stat.maxWave,   // 서버 필드명은 character
-        kills:stat.kills, bosses:stat.bosses, combo:stat.bestCombo
+        kills:stat.kills, bosses:stat.bosses, combo:stat.bestCombo,
+        dur: Math.max(0, Math.round(MATCH_TIME - timeLeft))   // 플레이 시간(초) — 조기 클리어면 짧다
       });
       if(res && res.ok && res.rank){
         showRank(res);
@@ -5379,46 +5835,69 @@
     return NET.matchRole!=='guest'? playerName+' & '+mate : mate+' & '+playerName;
   }
   function showRank(r){
+    //  순위는 같은 모드(싱글은 싱글끼리, 협동은 협동끼리) 안에서 매긴다
     $('resRank').innerHTML=(NET.matchMode==='coop'? '<b>'+esc(teamLabel())+'</b> 팀 · 협동 전체 <b>'+r.total.toLocaleString()+'</b>팀'
-                                    : '전체 <b>'+r.total.toLocaleString()+'</b>명')
+                                                  : '싱글 전체 <b>'+r.total.toLocaleString()+'</b>개 기록')
       +' 중 <b>'+r.rank.toLocaleString()+'</b>위';
   }
-  //  싱글·협동 두 목록을 한 화면에 함께 그린다 (서버는 mode 별로 따로 집계)
+  //  싱글·협동을 좌우 두 목록으로. 기간 탭(일간·주간·월간·전체)은 두 목록에 함께 걸린다 — 서버가 KST 기준으로 자른다
+  const RANK={range:'all'};
+  const fmtDur=sec=>{ sec=Math.max(0,Math.round(sec||0)); return Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0'); };
+  //  한국 시간 기준 월/일 — 09/28
+  const fmtKst=(()=>{ let f=null; try{ f=new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',month:'2-digit',day:'2-digit'}); }catch(e){}
+    return ts=>{ const d=new Date(ts); if(isNaN(d)) return '-';
+      if(f){ const o={}; f.formatToParts(d).forEach(p=>o[p.type]=p.value); return o.month+'/'+o.day; }
+      const k=new Date(d.getTime()+9*3600e3), z=n=>String(n).padStart(2,'0');
+      return z(k.getUTCMonth()+1)+'/'+z(k.getUTCDate()); }; })();
+  const RANGE_LABEL={day:'오늘',week:'이번 주',month:'이번 달',all:'전체'};
   function renderRankList(el, mode, rows){
-    const coop=mode==='coop';
     if(!rows.length){
-      el.innerHTML='<div class="rank-empty">아직 등록된 '+(coop?'협동 ':'')+'기록이 없습니다.<br>첫 번째 주인공이 되어 보세요!</div>';
+      el.innerHTML='<div class="rank-empty">'+RANGE_LABEL[RANK.range]+' 기록이 아직 없습니다.<br>첫 번째 주인공이 되어 보세요!</div>';
       return;
     }
+    const coop=mode==='coop';
     el.innerHTML=rows.map((r,i)=>{
-      const rk=i+1;
+      const rk=r.rank||i+1;
       const mine=r.name===playerName || (coop && r.partner===playerName);
       const cls='rank-row'+(rk<=3?' top'+rk:'')+(mine?' me':'');
       //  협동은 팀 한 줄 — 방장 & 동료 이름을 함께 보여준다
-      const team=coop && r.partner;
-      const title=team? esc(r.name)+' &amp; '+esc(r.partner) : esc(r.name);
-      //  한 줄로 표시 — 칸보다 길면 말줄임, 마우스를 올리면 전체 이름
-      const nmHtml='<span class="nm" title="'+title+'">'+title+'</span>';
+      const title=coop && r.partner? esc(r.name)+' &amp; '+esc(r.partner) : esc(r.name);
       return '<div class="'+cls+'"><span class="rk">'+rk+'</span>'
-           + nmHtml
-           + '<span class="ch">'+esc(r.character||'-')+'</span>'
+           + '<span class="nm" title="'+title+'">'+title+'</span>'
            + '<span class="wv">W'+(r.wave||1)+'</span>'
+           + '<span class="du">'+fmtDur(r.dur)+'</span>'
+           + '<span class="ts">'+fmtKst(r.ts)+'</span>'
            + '<span class="sc">'+Number(r.score||0).toLocaleString()+'</span></div>';
     }).join('');
   }
+  //  기간 탭 하나로 두 목록을 함께 바꾼다 — '주간' 을 누르면 싱글 주간 · 협동 주간
   async function renderRanks(){
-    const lists={solo:$('rankListSolo'), coop:$('rankListCoop')};
+    const lists={solo:$('rankListSolo'), coop:$('rankListCoop')}, meta=$('rankMeta'), range=RANK.range;
     Object.values(lists).forEach(el=>el.innerHTML='<div class="rank-empty">불러오는 중…</div>');
+    meta.textContent='';
+    const totals={};
     await Promise.all(Object.entries(lists).map(async ([mode,el])=>{
       try{
-        const res=await apiGet('/api/ranks?mode='+mode+'&limit=20');
+        const res=await apiGet('/api/ranks?mode='+mode+'&range='+range+'&limit=20');
+        if(RANK.range!==range) return;                 // 탭을 그새 바꿨으면 버린다
         renderRankList(el, mode, (res && res.ranks) || []);
+        totals[mode]=(res && res.total)||0;
       }catch(err){
         el.innerHTML='<div class="rank-empty">랭킹 서버에 연결하지 못했습니다.<br>'
                     +'<span style="font-size:12px;opacity:.7">서버 없이도 게임은 정상 동작합니다.</span></div>';
       }
     }));
+    if(RANK.range!==range) return;
+    if(totals.solo!=null || totals.coop!=null)
+      meta.textContent=RANGE_LABEL[range]+' · 싱글 '+(totals.solo||0).toLocaleString()+'개 · 협동 '
+                      +(totals.coop||0).toLocaleString()+'팀 · 한국 시간';
   }
+  $('rankTabs').addEventListener('click', e=>{
+    const t=e.target.closest('.rank-tab'); if(!t) return;
+    RANK.range=t.dataset.range;
+    [...$('rankTabs').children].forEach(b=>b.classList.toggle('on', b===t));
+    renderRanks();
+  });
   const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
   // ═════════ 결과 화면 ═════════
@@ -5480,6 +5959,14 @@
   // ═════════ 화면 버튼 배선 ═════════
   //  출전 준비 화면 상단에 지금 고른 모드를 박아 둔다 (잘못 눌러 들어온 것을 바로 알아채게)
   function setModeTag(mode){
+    if(mode==='tutorial'){
+      $('setupMode').innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4H20v14H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M8 8h8M8 12h6"/></svg>튜토리얼 <i>발명이와 조작을 하나씩 익히기</i>';
+      return;
+    }
+    if(mode==='park'){
+      $('setupMode').innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l5 7h-3l4 5h-5v6h-2v-6H6l4-5H7z"/></svg>자유 공원 <i>낮의 공원에서 사람들과 쉬어 가기</i>';
+      return;
+    }
     const solo = mode!=='coop';
     $('setupMode').innerHTML =
       (solo
@@ -5507,6 +5994,20 @@
   function openRanks(){ show(scrRank); renderRanks(); }
   $('btnRank').onclick=openRanks;
   $('btnStory').onclick=()=>show(scrStory);
+  $('btnPractice').onclick=()=>{ $('scrPractice').classList.remove('hidden'); };
+  $('pracBack').onclick=()=>{ $('scrPractice').classList.add('hidden'); };
+  $('pracTutorial').onclick=()=>{                      // 이름 · 캐릭터 없이 바로 시작
+    $('scrPractice').classList.add('hidden');
+    pendingMode='tutorial'; enterTutorial();
+  };
+  $('pracPark').onclick=()=>{
+    $('scrPractice').classList.add('hidden');
+    pendingMode='park'; setModeTag('park');
+    $('nickInput').value = playerName==='요원'? randomName() : playerName;
+    buildPickCards(); refreshSetup(); show(scrSetup);
+    setTimeout(()=>$('nickInput').focus(), 30);
+    $('nickInput').dataset.fresh='1';
+  };
   $('btnStoryBack').onclick=()=>show(scr0);
   $('btnSetupBack').onclick=()=>show(scr0);
   //  가이드 화면은 싱글과 협동이 함께 쓴다.
@@ -5555,6 +6056,8 @@
     playerName=$('nickInput').value.trim().slice(0,8) || '요원';
     applyLoadout(charIdx);
     if(pendingMode==='coop'){ NET.mode='solo'; openLobby(); }   // 실제 coop 전환은 start 수신 시
+    else if(pendingMode==='park'){ enterPark(); }
+    else if(pendingMode==='tutorial'){ enterTutorial(); }
     else { NET.mode='solo'; openSoloGuide(); }
   };
   $('btnGoBattle').onclick=()=>{
@@ -5587,14 +6090,20 @@
     pausedBy = fromMate? 'mate' : 'me';
     gameState='paused';
     clearInterval(fireTimer); fireTimer=null;
+    if(isPark()) chatShow(false);
     for(const k in keys) keys[k]=false;            // 눌린 키가 남아 계속 움직이는 것 방지
     document.body.classList.add('paused');         // 커서를 다시 드러낸다
     const who=(NET.peer&&NET.peer.name)||'동료';
     $('pauseMsg').textContent = fromMate? who+' 님이 게임을 일시정지했습니다. 다시 시작할 때까지 기다려 주세요.'
                               : isCoop()? '게임이 멈춰 있습니다. 동료 화면도 함께 멈춥니다.'
                               : '게임이 멈춰 있습니다.';
+    if(isPark()) $('pauseMsg').textContent='잠시 멈췄습니다. 다른 사람들은 계속 공원에 있습니다.';
+    if(isTutorial()) $('pauseMsg').textContent='튜토리얼을 잠시 멈췄습니다.';
+    $('pLeave').querySelector('span').textContent= isTutorial()? '튜토리얼 나가기' : '공원 나가기';
     $('pResume').classList.toggle('hidden', fromMate);
-    $('pQuit').classList.toggle('hidden', isGuest());
+    $('pQuit').classList.toggle('hidden', isGuest() || isTraining());
+    $('pLeave').classList.toggle('hidden', !isTraining());
+    syncSensUI();                                  // 열 때마다 현재 선택으로 맞춘다
     scrPause.classList.remove('hidden');
     if(isCoop() && !fromMate) relay({k:'pause'});
     BGM.pause();
@@ -5631,6 +6140,506 @@
   }
   $('pResume').onclick=()=>resumeGame();
   $('pQuit').onclick=quitToResult;
+  $('pLeave').onclick=()=>{ if(isTutorial()) exitTutorial(); else exitPark(); };
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  자유 공원 — 모드 진입 · 퇴장 · 다른 사람들 · 채팅
+  //   · 피해 · 체력 · 타이머 · 웨이브 · 점수 · 랭킹이 전부 없다. 걷고, 뛰고, 손짓(F)만 한다.
+  //   · 서버가 있으면 같은 공원에 있는 사람들이 서로 보인다. 없으면 혼자 있는 공원.
+  //   · 방장 없음: 각자 자기 위치를 보내고, 서버가 초당 10회 모두의 위치를 한 묶음으로 돌려준다.
+  // ═══════════════════════════════════════════════════════════════════════════
+  let MODE='battle';                                 // 'battle' | 'park'
+  const isPark=()=>MODE==='park';
+  const parkPeers=new Map();                         // id → {g, A, label, name, x,y,z,ry, seen}
+  let parkId=0, parkAcc=0, parkOnline=false;
+  const PARK_HZ=10;
+  const charModelByName=n=>{ const L=LOADOUTS.find(l=>l.name===n); return L? L.model : 0; };
+
+  //  머리 위 이름표 — 체력바 없이 이름만
+  function makeNameLabel(name){
+    const W=256, H=56, cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+    const ctx=cv.getContext('2d'), tex=new THREE.CanvasTexture(cv);
+    const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthWrite:false}));
+    sp.scale.set(2.2, 2.2*H/W, 1);
+    const rr=(x,y,w,h,r)=>{ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); };
+    ctx.font='bold '+(name.length>6? 22 : 26)+'px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    const tw=Math.min(W-16, ctx.measureText(name).width+36);
+    rr((W-tw)/2,8,tw,40,12); ctx.fillStyle='rgba(10,20,14,.78)'; ctx.fill(); ctx.lineWidth=2.5; ctx.strokeStyle='#cfe7d3'; ctx.stroke();
+    ctx.fillStyle='#f3f1ec'; ctx.fillText(name, W/2, 28);
+    tex.needsUpdate=true;
+    return sp;
+  }
+  function parkPeerEnsure(id,name,char){
+    let P=parkPeers.get(id);
+    if(P) return P;
+    const g=makeAgent(0x2f7fd6, null, charModelByName(char));
+    const ly=g.userData.labelY||2.3;
+    const label=makeNameLabel(name||'요원'); label.position.set(0,ly+.15,0); g.add(label);
+    g.visible=false; scene.add(g);
+    P={g, name, char, x:0,y:0,z:0,ry:0, seen:0, first:true,
+       A:{group:g, py:0, phase:Math.random()*6, isAgent:true, walkPh:0, moveDx:0, moveDz:0, moveHold:0,
+          aF:0, aS:0, aSpd:0, headTgt:0, aiming:false, aimPitch:0, atkT:0, aimHold:0}};
+    parkPeers.set(id,P);
+    return P;
+  }
+  function parkPeerRemove(id){
+    const P=parkPeers.get(id); if(!P) return;
+    scene.remove(P.g); disposeParts(P.g); parkPeers.delete(id);
+    parkCount();
+  }
+  function parkClearPeers(){ [...parkPeers.keys()].forEach(parkPeerRemove); }
+  function parkCount(){
+    const n=1+parkPeers.size;
+    $('parkChip').textContent='자유 공원 · '+n+'명'+(parkOnline? '' : ' · 오프라인');
+  }
+  //  서버가 보낸 한 묶음(모두의 위치)을 받아 목표 위치를 갱신한다
+  function parkSnapshot(list){
+    const now=performance.now(), seen=new Set();
+    for(const r of list){
+      const [id,name,char,x,y,z,ry,sw]=r;
+      if(id===parkId) continue;
+      seen.add(id);
+      const P=parkPeerEnsure(id,name,char);
+      if(P.first){ P.first=false; P.g.position.set(x,0,z); P.A.py=y; P.A.headTgt=ry+Math.PI; P.g.rotation.y=ry+Math.PI; P.g.visible=true; parkCount(); }
+      P.x=x; P.y=y; P.z=z; P.ry=ry; P.seen=now;
+      if(sw && P.A.atkT<=0){ P.A.atkT=.28; P.A.aiming=false; }   // 손짓(근접 스윙)
+    }
+    for(const id of [...parkPeers.keys()]) if(!seen.has(id)) parkPeerRemove(id);
+  }
+  function parkPeersTick(dt){
+    for(const [,P] of parkPeers){
+      const g=P.g, A=P.A, ox=g.position.x, oz=g.position.z;
+      g.position.x+=(P.x-g.position.x)*Math.min(1,dt*12);
+      g.position.z+=(P.z-g.position.z)*Math.min(1,dt*12);
+      A.py+=(P.y-A.py)*Math.min(1,dt*12);
+      A.moveDx=g.position.x-ox; A.moveDz=g.position.z-oz;
+      A.headTgt=P.ry+Math.PI;
+      if(A.atkT>0) A.atkT-=dt;
+      animEntity(A, dt, false);
+    }
+  }
+  //  내 위치를 초당 10회 보낸다 — 손짓 중이면 표시
+  function parkTick(dt){
+    if(!parkOnline || !NET.connected) return;
+    parkAcc+=dt; if(parkAcc<1/PARK_HZ) return; parkAcc=0;
+    netSend({t:'pk', d:[+px.toFixed(2), +py.toFixed(2), +pz.toFixed(2), +yaw.toFixed(2), meleeT>0?1:0]});
+  }
+
+  // ── 채팅 ────────────────────────────────────────────────────────────────
+  const chatBox=$('parkChat'), chatLog=$('chatLog'), chatIn=$('chatIn');
+  const chatOpen=()=>chatBox.classList.contains('typing');
+  function chatLine(html, kind){
+    const d=document.createElement('div'); d.className='cl'+(kind? ' '+kind:''); d.innerHTML=html;
+    chatLog.appendChild(d);
+    while(chatLog.children.length>8) chatLog.removeChild(chatLog.firstChild);
+    d.dataset.t=String(performance.now());
+  }
+  function chatShow(open){
+    chatBox.classList.toggle('typing', open);
+    if(open){ for(const k in keys) keys[k]=false; clearInterval(fireTimer); fireTimer=null; chatIn.value=''; chatIn.focus(); }
+    else { chatIn.blur(); }
+  }
+  function chatSend(){
+    const m=chatIn.value.trim().slice(0,60);
+    chatShow(false);
+    if(!m) return;
+    if(parkOnline && NET.connected) netSend({t:'pc', m});
+    else chatLine('<b>'+esc(playerName)+'</b> '+esc(m));            // 오프라인이면 내 화면에만
+  }
+  chatIn.addEventListener('keydown', e=>{
+    e.stopPropagation();
+    if(e.key==='Enter'){ e.preventDefault(); chatSend(); }
+    else if(e.key==='Escape'){ e.preventDefault(); chatShow(false); }
+  });
+  chatIn.addEventListener('blur', ()=>{ if(chatOpen()) chatBox.classList.remove('typing'); });
+  function chatTick(){
+    //  오래된 줄은 흐려진다 (입력 중에는 전부 보인다)
+    const now=performance.now();
+    for(const d of chatLog.children){ const age=(now-(+d.dataset.t||0))/1000; d.style.opacity= chatOpen()? 1 : age<10? 1 : age<13? 1-(age-10)/3 : 0; }
+  }
+
+  // ── 진입 / 퇴장 ──────────────────────────────────────────────────────────
+  function enterPark(){
+    MODE='park'; NET.mode='solo'; NET.room=0; NET.peer=null; NET.matchMode='park';
+    clearInterval(cdTimer); cdTimer=null;
+    BGM.stop();
+    setWorld('park');
+    ground.visible=false;                          // 전투 맵 흙바닥은 숨긴다 (공원 잔디가 대신)
+    dayHold=0; applyDaylight(0,true);              // 낮 고정
+    applyLoadout(charIdx);
+    { const img=$('hpFaceImg'), url=hudFace(LOADOUTS[charIdx].model); if(url) img.src=url; }
+    resetMatch();
+    pickups.forEach(p=>{ p.active=false; p.g.visible=false; p.respawnT=1e9; });
+    const sp=PARK.spawns[(Math.random()*PARK.spawns.length)|0];
+    px=sp[0]+(Math.random()-.5)*1.5; pz=sp[1]; py=0; vy=0; grounded=true;
+    camera.position.set(px,1.62,pz); faceMapCenter();
+    show(null);
+    hud.classList.remove('hidden'); hud.classList.add('park');
+    chatLog.innerHTML=''; chatBox.classList.remove('hidden'); chatShow(false);
+    $('parkChip').classList.remove('hidden');
+    parkOnline=false; parkId=0; parkClearPeers(); parkCount();
+    gameState='playing';
+    requestLock(); refreshLockHint();
+    BGM.park();
+    chatLine('자유 공원에 들어왔습니다. <b>Enter</b> 로 이야기하고, <b>F</b> 로 손짓해 보세요.','sys');
+    netConnect(()=>{ netSend({t:'park', name:playerName, char:LOADOUTS[charIdx].name}); },
+               ()=>{ chatLine('서버에 연결하지 못했습니다. 혼자 있는 공원입니다.','sys'); parkCount(); });
+  }
+  function exitPark(){
+    if(!isPark()) return;
+    if(parkOnline) netSend({t:'unpark'});
+    parkOnline=false; parkId=0; parkClearPeers();
+    chatShow(false); chatBox.classList.add('hidden');
+    hud.classList.remove('park');
+    $('parkChip').classList.add('hidden');
+    scrPause.classList.add('hidden'); document.body.classList.remove('paused');
+    setWorld('battle'); ground.visible=true;
+    dayHold=null; resetDaylight();
+    MODE='battle'; NET.matchMode='solo';
+    goMenu();
+  }
+  //  서버 메시지 (netHandle 에서 먼저 거쳐 간다)
+  function parkNet(m){
+    if(m.t==='parkok'){ parkOnline=true; parkId=m.id; parkCount(); chatLine('연결되었습니다. 지금 '+m.n+'명이 공원에 있습니다.','sys'); return true; }
+    if(m.t==='parkfull'){ chatLine('공원이 가득 찼습니다 ('+m.max+'명). 혼자 있는 공원으로 둘러봅니다.','sys'); return true; }
+    if(m.t==='pks'){ if(isPark()) parkSnapshot(m.p); return true; }
+    if(m.t==='pc'){ if(isPark()) chatLine('<b>'+esc(m.name)+'</b> '+esc(m.m), m.id===parkId? 'me':''); return true; }
+    if(m.t==='pj'){ if(isPark()) chatLine('<b>'+esc(m.name)+'</b> 님이 들어왔습니다.','sys'); return true; }
+    if(m.t==='pl'){ if(isPark()){ chatLine('<b>'+esc(m.name)+'</b> 님이 나갔습니다.','sys'); parkPeerRemove(m.id); } return true; }
+    return false;
+  }
+  function parkStep(dt){
+    if(!isPark()) return;
+    parkTick(dt); parkPeersTick(dt); chatTick();
+  }
+  //  점검용 — 상태 한눈에
+  window.__parkState=()=>({mode:MODE, gs:gameState, online:parkOnline, id:parkId, peers:parkPeers.size, coll:colliders.length, pos:[+px.toFixed(1),+py.toFixed(1),+pz.toFixed(1)], yaw:+yaw.toFixed(2), pitch:+pitch.toFixed(2), pB:+pitchBase.toFixed(2), my:+my.toFixed(2), rmy:+rawMy.toFixed(2), locked:isLocked(), cam:[+camera.position.x.toFixed(1),+camera.position.y.toFixed(2),+camera.position.z.toFixed(1)], crx:+camera.rotation.x.toFixed(2), day:+dayT.toFixed(2), melee:meleeT>0, parkVis:!!(PARK.group&&PARK.group.visible), arenaVis:arenaGroup.visible, groundVis:ground.visible, hold:dayHold});
+  window.__parkLook=(d,pt)=>{ yawBase+=d; if(pt!=null) pitchBase=pt; };
+  window.__parkSetYaw=(y,pt)=>{ yawBase=y; if(pt!=null) pitchBase=pt; };
+  window.__parkTeleport=(x,z)=>{ px=x; pz=z; camera.position.set(px,py+eyeH,pz); };
+  window.__peersDbg=()=>[...parkPeers.values()].map(P=>({x:P.g.position.x,z:P.g.position.z,name:P.name}));
+  window.__boltCount=()=>bolts.length;
+  window.__gameState=()=>gameState;
+  window.__endNow=(tl)=>{ if(tl!=null) timeLeft=tl; endMatch(); };
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  튜토리얼 — 발명이가 옆에서 말을 걸며 조작을 하나씩 익히게 한다
+  //   · 대본은 STEPS 에 있다. 단계 → 과제 순서로 흐르고, 과제마다 안내(입력 잠금) → 조작 → 칭찬.
+  //   · 판정은 게임 코드 곳곳의 tutEvent() 호출과, 매 프레임 check() 로 한다.
+  //   · 세계는 자유 공원(낮 고정)을 쓴다. 넓은 잔디가 발명이 · 폭탄 시범에 맞다.
+  // ═══════════════════════════════════════════════════════════════════════════
+  const isTutorial=()=>MODE==='tutorial';
+  const isTraining=()=>isPark()||isTutorial();       // 타이머 · 웨이브 · 스포너 · 랭킹이 없는 모드
+  const PRAISE=['좋아요!','잘했어요!','완벽해요!','Good!','정확해요!'];
+  const TUT_HOME={x:-2,z:12,yaw:-Math.PI/2};       // 마당 남동쪽에서 동쪽을 본다 (호수 · 간판이 시야 밖)
+  const TUT={on:false, lock:true, step:0, task:-1, phase:'', lines:[], li:0, shown:0, typeT:0, holdT:0,
+             home:{x:0,z:12,yaw:0}, dummies:[], ev:{}, acc:{}, praiseT:0, face:null, endLines:null};
+  let tutFaceUrl=null;
+
+  //  안내역 초상 — 1웨이브 인형 발명이를 한 번 렌더해 둔다
+  function makeTutFace(){
+    if(tutFaceUrl) return tutFaceUrl;
+    let r=null;
+    try{ r=new THREE.WebGLRenderer({antialias:true, alpha:true, preserveDrawingBuffer:true}); }catch(err){ return null; }
+    r.setPixelRatio(1); r.setSize(200,200);
+    const sc=new THREE.Scene();
+    sc.add(new THREE.HemisphereLight(0xfff1d6,0x8a7050,1.3));
+    const dl=new THREE.DirectionalLight(0xffe9c4,1.0); dl.position.set(3,6,6); sc.add(dl);
+    const cam=new THREE.PerspectiveCamera(30,1,.1,50);
+    cam.position.set(.9,1.55,3.3); cam.lookAt(0,1.25,0);
+    const g=makeBalmyeongi(0xd63b3b); applyNpcSkin(g,0,0xd63b3b);
+    g.rotation.y=-.35; sc.add(g);
+    r.render(sc,cam);
+    tutFaceUrl=r.domElement.toDataURL('image/png');
+    sc.remove(g); disposeParts(g); r.dispose();
+    if(r.forceContextLoss) try{ r.forceContextLoss(); }catch(err){}
+    return tutFaceUrl;
+  }
+
+  // ── 도우미 ─────────────────────────────────────────────────────────────
+  const fwd=()=>({x:-Math.sin(yaw), z:-Math.cos(yaw)});
+  function setView(yw,pt){
+    if(isLocked()){ yawBase=yw; pitchBase=pt; mx=my=rawMx=rawMy=0; }
+    else { yawBase=yw+rawMx*FOLLOW; pitchBase=pt+rawMy*1.1; mx=rawMx; my=rawMy; }
+    yaw=yw; pitch=pt; camera.rotation.set(pitch,yaw,0);
+    holdView(yw,pt);
+  }
+  const spotFree=(x,z,r)=>{ for(const c of colliders){ if(c.miny<1.5 && x+r>c.minx && x-r<c.maxx && z+r>c.minz && z-r<c.maxz) return false; }
+                            return Math.abs(x)<27 && z>-27 && z<29; };
+  //  내 앞 d m, 옆으로 side m 인 자리. 막혀 있으면 조금씩 당겨 본다
+  function aheadSpot(d, side, r){
+    const f=fwd(), rx=-f.z, rz=f.x;
+    for(let k=0;k<8;k++){
+      const dd=d-k*.7, x=px+f.x*dd+rx*(side||0), z=pz+f.z*dd+rz*(side||0);
+      if(spotFree(x,z,r||.8)) return [x,z];
+    }
+    return [px+f.x*3, pz+f.z*3];
+  }
+  function spawnDummy(x,z,invincible){
+    const g=makeBalmyeongi(0xd63b3b); applyNpcSkin(g,0,0xd63b3b);
+    const e=addEntity(g,'발명이','red', invincible? 9999 : Math.round(NPC_BASE_HP), x,z,false);
+    e.label.sprite.position.y=g.userData.labelY;
+    e.variant='normal'; e.sizeMul=1; e.spdMul=0; e.meleeDmg=0; e.ai=null;
+    e.dummy=true; e.invincible=!!invincible; e.netId=NET.entSeq++; e.skinId=0;
+    spawnFx(e);
+    TUT.dummies.push(e);
+    return e;
+  }
+  function clearDummies(){ TUT.dummies.forEach(e=>{ if(entities.includes(e)) removeEntity(e); }); TUT.dummies.length=0; }
+  function firstPickup(type){ return pickups.find(p=>p.type===type); }
+  function placePickupAt(p,x,z){ p.x=x; p.z=z; p.g.position.set(x,p.baseY,z); p.active=true; p.respawnT=0; p.g.visible=true; }
+  function dropItem(type, d, side){ const p=firstPickup(type); if(!p) return null; const [x,z]=aheadSpot(d||3, side||0, .5); placePickupAt(p,x,z); return p; }
+  function tutEvent(kind, data){ if(!TUT.on) return; TUT.ev[kind]=(TUT.ev[kind]||0)+1; if(kind==='hit'){ if(data&&data.crit) TUT.ev.crit=(TUT.ev.crit||0)+1; if(powerT>0) TUT.ev.powerHit=(TUT.ev.powerHit||0)+1; } }
+  const N=()=>esc(playerName);
+
+  // ── 대본 ───────────────────────────────────────────────────────────────
+  //  각 과제: intro(안내, 입력 잠금) → text(과제 문구) + check(매 프레임) → 칭찬 → after(한마디)
+  const STEPS=[
+    { title:'이동',
+      intro:[ '안녕하세요, {n} 요원님! 저는 발명이예요.',
+              '조작법부터 같이 익혀 볼까요? 제가 하나씩 알려드릴게요.' ],
+      tasks:[
+        { id:'move',   label:'이동',   intro:['먼저 걸어 볼게요. W A S D 로 움직일 수 있어요.'],
+          text:'W A S D 로 걸어 보세요', init:()=>{ TUT.acc.walk=0; }, check:()=>TUT.acc.walk>=3.5, linger:2.5 },
+        { id:'jump',   label:'점프',   intro:['이번엔 Space 로 폴짝 뛰어 볼까요?'],
+          text:'Space 로 점프해 보세요', init:()=>{ TUT.acc.jump=false; }, check:()=>TUT.acc.jump, linger:2.2 },
+        { id:'sprint', label:'달리기', intro:['Shift 를 누른 채 움직이면 훨씬 빨라요. 급할 때 꼭 써요!'],
+          text:'Shift 를 누른 채 달려 보세요', init:()=>{ TUT.acc.run=0; }, check:()=>TUT.acc.run>=4, linger:3.2 },
+        { id:'crouch', label:'앉기',   intro:['Ctrl 이나 C 로 앉으면 낮은 상자 뒤에 숨을 수 있어요.'],
+          text:'Ctrl 또는 C 로 앉아 보세요', init:()=>{ TUT.acc.crouch=0; }, check:()=>TUT.acc.crouch>=.5, linger:2.2,
+          after:['이제 어디든 갈 수 있겠네요!'] }
+      ]},
+    { title:'공격',
+      intro:[ '다음은 공격이에요. 앞에 연습용 발명이를 하나 세워 둘게요.',
+              '연습용이니까 마음껏 쏘셔도 돼요!' ],
+      enter:()=>{ const [x,z]=aheadSpot(7,0,.9); spawnDummy(x,z,true); },
+      tasks:[
+        { id:'shoot', label:'발사',      intro:['좌클릭으로 마법탄이 나가요. 발명이를 맞혀 보세요.'],
+          text:'좌클릭으로 발명이를 맞히세요', init:()=>{ TUT.ev.hit=0; }, check:()=>(TUT.ev.hit||0)>=1, linger:2.4 },
+        { id:'burst', label:'연사',      intro:['누르고 있으면 계속 나가요. 이번엔 꾹 눌러 보세요!'],
+          text:'좌클릭을 꾹 눌러 6발 이상 맞히세요', init:()=>{ TUT.ev.hit=0; }, check:()=>(TUT.ev.hit||0)>=6, linger:2.6 },
+        { id:'melee', label:'근접 공격', intro:['가까이 붙었을 땐 F 로 마법봉을 휘두를 수 있어요.','발명이 바로 앞까지 가서 F!'],
+          text:'발명이 앞에서 F 를 누르세요', init:()=>{ TUT.ev.melee=0; }, check:()=>(TUT.ev.melee||0)>=1, linger:2.4,
+          after:['시원하게 들어갔어요!'] }
+      ]},
+    { title:'약점',
+      intro:[ '비밀 하나 알려드릴게요. 머리를 맞히면 피해가 2배예요!' ],
+      tasks:[
+        { id:'crit', label:'머리 명중', intro:['조준을 조금 올려서 발명이 머리를 노려 보세요.'],
+          text:'발명이의 머리를 맞히세요 (피해 2배)', init:()=>{ TUT.ev.crit=0; }, check:()=>(TUT.ev.crit||0)>=1, linger:2.6,
+          after:['숫자가 확 커진 거 보이시죠? 단단한 놈일수록 머리예요.'] }
+      ]},
+    { title:'아이템',
+      intro:[ '바닥에 떨어진 아이템은 밟기만 하면 바로 써져요. 하나씩 보여드릴게요.' ],
+      enter:()=>{ clearDummies(); },
+      tasks:[
+        { id:'hp', label:'체력 회복',
+          intro:['앗, 요원님 체력이 좀 깎였네요… (체력을 50 낮췄어요)','초록 십자가 체력 회복이에요.'],
+          enter:()=>{ hp=Math.max(1,hp-50); updateHpHUD(); dropItem('hp',3.2,0); },
+          text:'초록 십자를 주워 회복하세요', init:()=>{ TUT.ev.pickup_hp=0; }, check:()=>(TUT.ev.pickup_hp||0)>=1, linger:2.2,
+          after:['체력 50 이 돌아왔어요!'] },
+        { id:'spd', label:'이동 강화',
+          intro:['이번엔 파란 운동화예요. 주우면 8초 동안 빨라져요.'],
+          enter:()=>{ dropItem('spd',3.2,0); },
+          text:'운동화를 줍고, 이리저리 달려 보세요', init:()=>{ TUT.ev.pickup_spd=0; TUT.acc.spdRun=0; },
+          check:()=>(TUT.ev.pickup_spd||0)>=1 && TUT.acc.spdRun>=14, linger:3.5,
+          after:['확실히 빠르죠? 자, 제자리로 돌아올게요.'], leave:()=>tutHome() },
+        { id:'atk', label:'공격력 강화',
+          intro:['주황 검은 공격력 강화! 8초 동안 한 번에 3발이 나가요.','발명이를 다시 세워 둘게요.'],
+          enter:()=>{ const [x,z]=aheadSpot(7,0,.9); spawnDummy(x,z,true); dropItem('atk',3.2,0); },
+          text:'검을 줍고 발명이를 3번 맞히세요', init:()=>{ TUT.ev.pickup_atk=0; TUT.ev.powerHit=0; },
+          check:()=>(TUT.ev.pickup_atk||0)>=1 && (TUT.ev.powerHit||0)>=3, linger:3.0,
+          after:['한 번에 세 발! 몰려올 때 아주 든든해요.'] },
+        { id:'bomb', label:'특허 폭탄',
+          intro:['마지막은 특허 폭탄이에요. 주우면 슬롯에 들어가고, R 로 그 자리에서 터뜨려요.','발명이들을 앞에 모아 둘게요.'],
+          enter:()=>{ clearDummies(); tutBombSetup(); },
+          text:'폭탄을 줍고, 발명이들 가까이서 R 을 누르세요',
+          init:()=>{ TUT.ev.bomb=0; TUT.acc.bombRetry=false; }, linger:3.2,
+          check:()=>{
+            if(!(TUT.ev.bomb>0)) return false;
+            const left=TUT.dummies.filter(e=>e.alive).length;
+            if(left===0) return true;
+            //  몇 마리가 범위 밖이었다 — 폭탄을 하나 더 주고 다시
+            if(!TUT.acc.bombRetry){ TUT.acc.bombRetry=true; TUT.ev.bomb=0; tutAside(left+'마리가 남았네요. 폭탄을 하나 더 드릴게요 — 발명이들 가운데서 눌러 보세요!'); dropItem('bomb',2.5,0); }
+            else if(TUT.ev.bomb>0){ TUT.ev.bomb=0; tutAside('아직 '+left+'마리… 한 번 더!'); dropItem('bomb',2.5,0); }
+            return false;
+          },
+          after:['한 방에 다섯이나! 몰려 있을 때 쓰는 게 제일 값져요.'] }
+      ]}
+  ];
+  const OUTRO=[ '{n} 요원님, 이제 준비 끝!', '그럼 실전으로 가 볼까요?' ];
+
+  function tutBombSetup(){
+    //  내 앞 6.5m 부채꼴에 다섯 — 전부 폭탄 반경(9.5m) 안
+    const f=fwd(), base=Math.atan2(f.x,f.z);
+    [-.62,-.31,0,.31,.62].forEach(a=>{
+      const ang=base+a, x=px+Math.sin(ang)*6.5, z=pz+Math.cos(ang)*6.5;
+      const ok=spotFree(x,z,.8)? [x,z] : aheadSpot(5.5, a*6, .8);
+      spawnDummy(ok[0],ok[1],false);
+    });
+    dropItem('bomb',2.5,0);
+  }
+  function tutHome(){
+    const h=TUT.home; px=h.x; pz=h.z; py=0; vy=0; grounded=true;
+    camera.position.set(px,py+eyeH,pz); setView(h.yaw,0);
+    itemFlash('spd');
+  }
+
+  // ── 진행 ───────────────────────────────────────────────────────────────
+  const tutBox=$('tutBox'), tutText=$('tutText'), tutTasks=$('tutTasks'), tutHint=$('tutHint'), tutProg=$('tutProg');
+  function tutLock(on){
+    TUT.lock=on;
+    if(on){ for(const k in keys) keys[k]=false; clearInterval(fireTimer); fireTimer=null; }
+    tutHint.textContent= on? 'Space · 클릭으로 넘기기' : '';
+    tutBox.classList.toggle('talk', on);
+  }
+  function tutSay(lines, then){
+    TUT.phase='say'; TUT.lines=lines.map(l=>l.replace('{n} 요원님', playerName==='요원'? '요원님' : playerName+' 요원님').replace('{n}', playerName)); TUT.li=0; TUT.then=then;
+    tutLock(true); tutStartLine();
+  }
+  function tutStartLine(){ TUT.shown=0; TUT.typeT=0; TUT.holdT=0; tutText.textContent=''; }
+  function tutSkip(){
+    if(TUT.phase!=='say') return;
+    const line=TUT.lines[TUT.li]||'';
+    if(TUT.shown<line.length){ TUT.shown=line.length; tutText.textContent=line; TUT.holdT=0; return; }
+    tutNextLine();
+  }
+  function tutNextLine(){
+    TUT.li++;
+    if(TUT.li<TUT.lines.length){ tutStartLine(); return; }
+    TUT.phase=''; const f=TUT.then; TUT.then=null; if(f) f();
+  }
+  //  과제 중 한마디 (잠그지 않는다)
+  function tutAside(text){ tutText.textContent=text; }
+  function tutRenderTasks(){
+    const S=STEPS[TUT.step]; if(!S) return;
+    tutTasks.innerHTML=S.tasks.map((t,i)=>'<div class="tt'+(i<TUT.task?' done':i===TUT.task?' now':'')+'"><i></i>'+esc(t.label)+'</div>').join('');
+    tutProg.textContent=(TUT.step+1)+' / '+STEPS.length+' · '+S.title;
+  }
+  function tutPraise(){
+    const p=PRAISE[(Math.random()*PRAISE.length)|0];
+    const el=$('tutPraise'); el.textContent=p; el.classList.remove('hidden','pop'); void el.offsetWidth; el.classList.add('pop');
+    TUT.praiseT=1.3; SFX.pickup && SFX.pickup();
+    return p;
+  }
+  function tutBeginStep(){
+    const S=STEPS[TUT.step];
+    if(!S){ tutTasks.innerHTML=''; tutProg.textContent=STEPS.length+' / '+STEPS.length+' · 완료'; tutSay(OUTRO, tutFinish); return; }
+    TUT.task=-1; tutRenderTasks();
+    tutSay(S.intro||[], ()=>{ if(S.enter) S.enter(); tutBeginTask(); });
+  }
+  function tutBeginTask(){
+    const S=STEPS[TUT.step]; TUT.task++;
+    const T=S.tasks[TUT.task];
+    if(!T){ TUT.step++; tutBeginStep(); return; }
+    tutRenderTasks();
+    tutSay(T.intro||[], ()=>{
+      if(T.enter) T.enter();
+      if(T.init) T.init();
+      TUT.phase='act'; tutLock(false); tutText.textContent=T.text;
+    });
+  }
+  function tutTaskDone(){
+    const S=STEPS[TUT.step], T=S.tasks[TUT.task];
+    //  조건을 채운 순간 칭찬만 띄우고, 조작은 그대로 둔다 — 느낌을 더 체감할 시간(linger)을 준 뒤 넘어간다
+    tutText.textContent=tutPraise();
+    TUT.phase='linger'; TUT.holdT=0; TUT.lingerFor=T.linger||2.6;
+    TUT.then=()=>{
+      tutLock(true);
+      const next=()=>{ if(T.leave) T.leave(); tutBeginTask(); };
+      const after=T.after||[];
+      if(after.length) tutSay(after,next); else next();
+    };
+  }
+  function tutFinish(){
+    TUT.on=false; tutLock(true);
+    releaseLock(); document.body.classList.add('paused');
+    gameState='paused';
+    $('scrTutEnd').classList.remove('hidden');
+  }
+
+  //  매 프레임 — 타자기 · 자동 넘김 · 과제 판정 · 발명이가 나를 보게
+  function tutTick(dt){
+    if(!TUT.on) return;
+    if(TUT.praiseT>0){ TUT.praiseT-=dt; if(TUT.praiseT<=0) $('tutPraise').classList.add('hidden'); }
+    for(const e of TUT.dummies){ if(e.alive){ const g=e.group; e.headTgt=Math.atan2(px-g.position.x, pz-g.position.z); } }
+    if(TUT.phase==='say'){
+      const line=TUT.lines[TUT.li]||'';
+      if(TUT.shown<line.length){
+        TUT.typeT+=dt;
+        while(TUT.typeT>=.028 && TUT.shown<line.length){ TUT.typeT-=.028; TUT.shown++; }
+        tutText.textContent=line.slice(0,TUT.shown);
+      } else {
+        TUT.holdT+=dt;
+        if(TUT.holdT>=Math.max(1.7, .8+line.length*.055)) tutNextLine();
+      }
+      return;
+    }
+    if(TUT.phase==='pause'){ TUT.holdT+=dt; if(TUT.holdT>=TUT.pauseFor){ TUT.phase=''; const f=TUT.then; TUT.then=null; if(f) f(); } return; }
+    if(TUT.phase==='linger'){                     // 과제는 끝났지만 아직 자유롭게 움직이는 여운 구간
+      const dx=px-(TUT.lx==null?px:TUT.lx), dz=pz-(TUT.lz==null?pz:TUT.lz); TUT.lx=px; TUT.lz=pz;
+      const d=Math.hypot(dx,dz); if(d<2 && (TUT.ev.pickup_spd||0)>0) TUT.acc.spdRun=(TUT.acc.spdRun||0)+d;
+      TUT.holdT+=dt; if(TUT.holdT>=TUT.lingerFor){ TUT.phase=''; const f=TUT.then; TUT.then=null; if(f) f(); } return; }
+    if(TUT.phase!=='act') return;
+    //  움직임 누적
+    const dx=px-(TUT.lx==null?px:TUT.lx), dz=pz-(TUT.lz==null?pz:TUT.lz); TUT.lx=px; TUT.lz=pz;
+    const d=Math.hypot(dx,dz);
+    if(d<2){                                       // 순간이동은 거리로 치지 않는다
+      TUT.acc.walk=(TUT.acc.walk||0)+d;
+      if(keys.ShiftLeft||keys.ShiftRight) TUT.acc.run=(TUT.acc.run||0)+d;
+      if((TUT.ev.pickup_spd||0)>0) TUT.acc.spdRun=(TUT.acc.spdRun||0)+d;
+    }
+    if(py>.25) TUT.acc.jump=true;
+    if(keys.ControlLeft||keys.ControlRight||keys.KeyC) TUT.acc.crouch=(TUT.acc.crouch||0)+dt;
+    const T=STEPS[TUT.step].tasks[TUT.task];
+    if(T && T.check()) tutTaskDone();
+  }
+
+  // ── 진입 / 퇴장 ────────────────────────────────────────────────────────
+  function enterTutorial(){
+    MODE='tutorial'; NET.mode='solo'; NET.room=0; NET.peer=null; NET.matchMode='tutorial';
+    clearInterval(cdTimer); cdTimer=null;
+    BGM.stop();
+    setWorld('park'); ground.visible=false;
+    dayHold=0; applyDaylight(0,true);
+    applyLoadout(charIdx);
+    { const img=$('hpFaceImg'), url=hudFace(LOADOUTS[charIdx].model); if(url) img.src=url; $('hpFace').classList.toggle('hidden', !url); }
+    resetMatch();
+    pickups.forEach(p=>{ p.active=false; p.g.visible=false; p.respawnT=1e9; });
+    TUT.dummies.length=0;
+    px=TUT_HOME.x; pz=TUT_HOME.z; py=0; vy=0; grounded=true;
+    camera.position.set(px,eyeH,pz); setView(TUT_HOME.yaw,0);
+    TUT.home={x:TUT_HOME.x,z:TUT_HOME.z,yaw:TUT_HOME.yaw};
+    Object.assign(TUT,{on:true, step:0, task:-1, phase:'', lines:[], li:0, ev:{}, acc:{}, praiseT:0, lx:null, lz:null});
+    show(null);
+    hud.classList.remove('hidden'); hud.classList.add('tutmode');
+    $('parkChat').classList.add('hidden'); $('parkChip').classList.add('hidden');
+    tutBox.classList.remove('hidden'); tutProg.classList.remove('hidden'); $('tutPraise').classList.add('hidden');
+    $('scrTutEnd').classList.add('hidden');
+    { const u=makeTutFace(); const img=$('tutFace'); if(u){ img.src=u; img.style.display=''; } else img.style.display='none'; }
+    gameState='playing';
+    requestLock(); refreshLockHint();
+    BGM.tutorial();
+    tutBeginStep();
+  }
+  function exitTutorial(){
+    if(!isTutorial()) return;
+    TUT.on=false; clearDummies();
+    tutBox.classList.add('hidden'); tutProg.classList.add('hidden'); $('tutPraise').classList.add('hidden');
+    $('scrTutEnd').classList.add('hidden');
+    hud.classList.remove('tutmode');
+    scrPause.classList.add('hidden'); document.body.classList.remove('paused');
+    setWorld('battle'); ground.visible=true;
+    dayHold=null; resetDaylight();
+    MODE='battle'; NET.matchMode='solo';
+    goMenu();
+  }
+  $('tutRetry').onclick=()=>{ $('scrTutEnd').classList.add('hidden'); document.body.classList.remove('paused'); clearDummies(); enterTutorial(); };
+  $('tutHome').onclick=()=>exitTutorial();
+  //  점검용
+  window.__tut=()=>({on:TUT.on, step:TUT.step, task:TUT.task, tid:(STEPS[TUT.step]&&STEPS[TUT.step].tasks[TUT.task]||{}).id||'', phase:TUT.phase, lock:TUT.lock, li:TUT.li, ev:Object.assign({},TUT.ev), acc:Object.assign({},TUT.acc),
+                     dummies:TUT.dummies.map(e=>({x:+e.group.position.x.toFixed(1), z:+e.group.position.z.toFixed(1), hp:e.hp, alive:e.alive, inv:!!e.invincible})),
+                     items:pickups.filter(p=>p.active).map(p=>({t:p.type,x:+p.x.toFixed(1),z:+p.z.toFixed(1)})), hp:hp, pitch:+pitch.toFixed(3), yaw:+yaw.toFixed(3), pos:[+px.toFixed(1),+py.toFixed(2),+pz.toFixed(1)], text:tutText.textContent});
+  window.__tutSkip=tutSkip;
+  window.__tutGoto=(n)=>{ clearDummies(); pickups.forEach(p=>{ p.active=false; p.g.visible=false; }); TUT.step=n; TUT.task=-1; TUT.ev={}; TUT.acc={}; TUT.phase=''; tutBeginStep(); };
 
   // ═════════ F1 조작법 오버레이 — 누르고 있는 동안만 ═════════
   const keyOverlay=$('keyOverlay');
@@ -5641,7 +6650,7 @@
   function hideKeyHelp(){ keyOverlay.classList.add('hidden'); }
 
   // ═════════ 조작 ═════════
-  let yaw=0, pitch=-0.02, yawBase=0, pitchBase=0;
+  let yaw=0, pitch=0, yawBase=0, pitchBase=0;
   const FOLLOW=1.6, EDGE=0.85, EDGE_SPD=3.0;
   let mx=0, my=0, rawMx=0, rawMy=0;
   const cvs=renderer.domElement;
@@ -5652,10 +6661,51 @@
   //   · 잠금은 브라우저 정책상 '클릭 같은 사용자 동작' 안에서만 걸 수 있다
   //   · ESC 를 누르면 브라우저가 잠금을 강제로 푼다 → 그 순간 일시정지로 전환
   //   · 잠금을 지원하지 않는 환경에서는 예전 커서 위치 방식으로 그대로 동작한다
-  const LOOK_SENS=0.0022;                       // 마우스 1px 당 회전(라디안)
+  //  ── 마우스 감도 ─────────────────────────────────────────────────────
+  //  기준값에 배율을 곱해 쓴다. 5단계이고 가운데(2번)가 기본.
+  //  간격은 등차가 아니라 등비 — 단계마다 체감 차이가 고르게 벌어진다.
+  const LOOK_BASE=0.0022;                       // 마우스 1px 당 회전(라디안)
+  const SENS_STEPS=[0.6, 0.8, 1.0, 1.3, 1.7];
+  const SENS_DEFAULT=2, SENS_KEY='pw:sens';
+  function loadSens(){
+    try{
+      const v=parseInt(localStorage.getItem(SENS_KEY),10);
+      if(v>=0 && v<SENS_STEPS.length) return v;
+    }catch(e){}
+    return SENS_DEFAULT;
+  }
+  let sensIdx=loadSens();
+  let LOOK_SENS=LOOK_BASE*SENS_STEPS[sensIdx];
+  function syncSensUI(){
+    const r=$('sensRange'); if(r) r.value=String(sensIdx);
+  }
+  function setSens(i){
+    if(!(i>=0 && i<SENS_STEPS.length)) return;
+    sensIdx=i;
+    LOOK_SENS=LOOK_BASE*SENS_STEPS[i];
+    try{ localStorage.setItem(SENS_KEY, String(i)); }catch(e){}
+    syncSensUI();
+  }
+  (function bindSens(){
+    const r=$('sensRange'); if(!r) return;
+    //  드래그·클릭이 캔버스로 새어 발사로 이어지지 않게 막는다
+    ['mousedown','click'].forEach(ev=>r.addEventListener(ev, e=>e.stopPropagation()));
+    r.addEventListener('input', ()=>{
+      const i=+r.value;
+      if(i===sensIdx) return;                      // 같은 칸을 지나가면 소리를 내지 않는다
+      setSens(i);
+      SFX.click && SFX.click();
+    });
+    syncSensUI();
+  })();
   const lockSupported=('pointerLockElement' in document) && !!cvs.requestPointerLock;
   const isLocked=()=>document.pointerLockElement===cvs;
-  let lockLostAt=-1e9, lockPauseAt=-1e9;
+  let lockLostAt=-1e9, lockPauseAt=-1e9, lockGotAt=-1e9;
+  //  시작 시점 고정 — 스폰 직후 잠금이 걸리기까지 커서 위치가 시점에 섞여 들어가(하늘 · 땅을 보고 시작) 잠기는 순간 그대로 굳어 버린다.
+  //  스폰 후 잠깐(또는 잠기는 순간까지)은 정해 둔 정면 시점을 그대로 유지한다.
+  let VIEW_HOLD=null;
+  function holdView(yw,pt){ VIEW_HOLD={yaw:yw, pitch:pt, until:performance.now()+1500}; }
+  function applyHold(){ if(!VIEW_HOLD) return; yawBase=VIEW_HOLD.yaw; pitchBase=VIEW_HOLD.pitch; mx=my=0; if(isLocked()) rawMx=rawMy=0; }
   const inBattle=()=>gameState==='playing'||gameState==='countdown';
   function requestLock(){
     if(!lockSupported || isLocked()) return;
@@ -5678,6 +6728,8 @@
   }
   document.addEventListener('pointerlockchange', ()=>{
     if(isLocked()){
+      lockGotAt=performance.now();
+      if(VIEW_HOLD){ applyHold(); VIEW_HOLD=null; yaw=yawBase; pitch=pitchBase; camera.rotation.set(pitch,yaw,0); refreshLockHint(); return; }
       //  잠기는 순간, 커서 위치로 기울어 있던 시점을 기준각에 합쳐 화면이 튀지 않게 한다
       if(gameState==='countdown'){ yawBase-=mx*FOLLOW; pitchBase-=my*1.1; }
       else { yawBase-=mx*FOLLOW; pitchBase=Math.max(-1.3,Math.min(1.3,pitchBase-my*1.1)); }
@@ -5695,7 +6747,11 @@
   addEventListener('mousemove',e=>{
     if(isLocked()){
       if(inBattle()){
-        //  잠금 직후 브라우저가 가끔 튀는 값을 보내므로 한 번에 너무 큰 이동은 잘라낸다
+        //  잠기는 순간 브라우저가 커서를 가운데로 옮긴 만큼을 movement 로 보내 시점이 하늘로 튄다.
+        //  잠금 직후 0.2초는 버리고, 1초 안의 큰 점프도 무시한다. 그 뒤엔 한 번에 너무 큰 값만 자른다.
+        const since=performance.now()-lockGotAt;
+        if(since<200) return;
+        if(since<1000 && (Math.abs(e.movementX||0)>120 || Math.abs(e.movementY||0)>120)) return;
         const dx=Math.max(-250,Math.min(250,e.movementX||0)), dy=Math.max(-250,Math.min(250,e.movementY||0));
         yawBase-=dx*LOOK_SENS;
         pitchBase=Math.max(-1.3,Math.min(1.3,pitchBase-dy*LOOK_SENS));
@@ -5760,6 +6816,8 @@
   cvs.addEventListener('mousedown',e=>{
     //  잠금이 풀려 있으면 같이 걸어 주되, 클릭을 삼키지는 않는다 — 누르면 무조건 나간다.
     if(lockSupported && inBattle() && !isLocked()) requestLock();
+    if(isPark()) return;                          // 공원: 발사 없음 (손짓 F 만)
+    if(isTutorial() && TUT.lock){ tutSkip(); return; }   // 안내 중: 클릭은 넘기기
     if(gameState!=='playing'||!playerAlive) return;
     if(e.button!==0) return;
     playerFire();
@@ -5768,6 +6826,43 @@
   });
   addEventListener('mouseup',()=>{ clearInterval(fireTimer); fireTimer=null; });
   addEventListener('blur',()=>{ clearInterval(fireTimer); fireTimer=null; });
+  //  커서 안전장치 — 스크립트가 죽거나 탭이 가려지거나 창을 벗어나면 잠금을 풀고 커서를 돌려준다
+  function cursorRescue(){
+    document.body.classList.remove('nocursor'); releaseLock();
+    try{ keyboardLock(false); }catch(e){}
+    try{ if(inBattle()) pauseGame(); }catch(e){}
+  }
+  addEventListener('error', cursorRescue);
+  addEventListener('unhandledrejection', cursorRescue);
+  addEventListener('pagehide', cursorRescue);
+  document.addEventListener('visibilitychange', ()=>{ if(document.hidden) cursorRescue(); });
+  addEventListener('blur', ()=>{ if(!isLocked()) document.body.classList.remove('nocursor'); });
+
+  //  실수로 창·탭이 닫히거나 페이지를 벗어나는 것을 막는다.
+  //   Ctrl 은 앉기, W 는 전진 — 앉아서 걷는 동안 그대로 Ctrl+W(탭 닫기)가 되어 버린다.
+  //   ① 키 단계에서 브라우저 기본 동작만 막고(파이어폭스 등에서 통한다. 전파는 끊지 않으므로
+  //      앉아 걷기·앉아 폭탄은 그대로 된다) ② 크롬처럼 막을 수 없는 조합은 확인창으로
+  //   ③ 전체화면이면 키보드 잠금으로 조합 자체를 가로챈다.
+  const EXIT_COMBO={KeyW:1, KeyN:1, KeyT:1, KeyR:1};             // Ctrl/Cmd 와 함께 눌리면 위험한 키
+  function runLive(){ return gameState==='playing'||gameState==='countdown'; }
+  addEventListener('keydown', e=>{
+    if(!runLive()) return;
+    if((e.ctrlKey||e.metaKey) && EXIT_COMBO[e.code]){ e.preventDefault(); return; }
+    if(e.code==='F5'){ e.preventDefault(); return; }
+    if(e.code==='F4' && (e.ctrlKey||e.altKey)){ e.preventDefault(); return; }
+    if(e.code==='Backspace' && e.target===document.body){ e.preventDefault(); return; }
+    if(e.altKey && (e.code==='ArrowLeft'||e.code==='ArrowRight')){ e.preventDefault(); return; }
+  }, true);                                                      // 캡처 단계 — 다른 핸들러보다 먼저
+  addEventListener('beforeunload', e=>{
+    if(!runLive()) return;
+    e.preventDefault(); e.returnValue=''; return '';
+  });
+  function keyboardLock(on){
+    const kb=navigator.keyboard;
+    if(!kb||!kb.lock) return;
+    try{ if(on && document.fullscreenElement) kb.lock(['KeyW','KeyN','KeyT','KeyR']); else kb.unlock(); }catch(err){}
+  }
+  document.addEventListener('fullscreenchange', ()=>keyboardLock(!!document.fullscreenElement));
 
   const keys={};
   addEventListener('keydown',e=>{
@@ -5781,6 +6876,14 @@
       togglePause(); return;
     }
     if(gameState==='paused') return;             // 일시정지 중에는 입력을 받지 않는다
+    if(isPark()){
+      if(e.target===chatIn) return;                // 채팅 입력 중 — 게임 키로 새지 않는다
+      if(e.code==='Enter' && !e.repeat){ e.preventDefault(); chatShow(true); return; }
+    }
+    if(isTutorial() && TUT.lock){                  // 안내 중: Space · Enter 로 넘기고 나머지는 무시
+      if((e.code==='Space'||e.code==='Enter') && !e.repeat) tutSkip();
+      e.preventDefault(); return;
+    }
     autoRelock();
     keys[e.code]=true;
     if(e.code==='KeyQ') tryShield();
@@ -5825,6 +6928,7 @@
     itemFlash(type);
     SFX.pickup();
     battleLog(subj(ME)+' <span class="hl">'+info.name+'</span> 아이템을 사용하여 '+effect+'했습니다.','item');
+    tutEvent('pickup_'+type);
     return true;
   }
 
@@ -5843,8 +6947,10 @@
   }
 
   function useBomb(){
+    if(isPark()) return;
     if(gameState!=='playing'||!playerAlive||bombCount<=0) return;
     bombCount--; updateBombHUD();
+    tutEvent('bomb');
     const c=new THREE.Vector3(px, py+0.2, pz);
     SFX.boom(c,false);
     boom(c,'blue');
@@ -5911,6 +7017,7 @@
   }
 
   function tryShield(){ // Q: 마법 실드 (2.5초 무효화)
+    if(isPark()) return;
     if(gameState!=='playing'||!playerAlive||shieldCd>0) return;
     shieldCd=pDashCd; shieldT=2.5;   // 캐릭터별 쿨다운 (이 빌드엔 대시가 없어 실드에 적용)
   }
@@ -5920,7 +7027,7 @@
   function tryMelee(){
     if(gameState!=='playing'||!playerAlive||meleeCdT>0) return;
     meleeCdT=MELEE_CD; meleeT=MELEE_CD;      // 스윙 모션 시작
-    const dmg=baseShotDamage()*0.5;          // 기본 공격의 절반
+    const dmg=baseShotDamage()*1.5;          // 기본 공격의 1.5배 (무기 강화 · 캐릭터 화력이 baseShotDamage 에 이미 반영)
     // 카메라 전방 벡터 (수평 성분)
     const fx=-Math.sin(yaw), fz=-Math.cos(yaw);
     let hitAny=false;
@@ -5939,7 +7046,7 @@
       hitAny=true;
     });
     // 헛스윙이어도 모션은 나간다 (타격감을 위해 명중 시에만 킥)
-    if(hitAny){ $('xh').classList.add('kick'); setTimeout(()=>$('xh').classList.remove('kick'),100); }
+    if(hitAny){ $('xh').classList.add('kick'); setTimeout(()=>$('xh').classList.remove('kick'),100); tutEvent('melee'); }
   }
   addEventListener('keyup',e=>{
     if(e.code==='F1'){ e.preventDefault(); hideKeyHelp(); return; }   // 떼면 바로 닫힘
@@ -5965,10 +7072,11 @@
   }
   //  맵 중앙을 바라보게 한다. 커서 방식일 때는 지금 커서 위치만큼 기준각을 보정해, 결과 시점이 정확히 중앙을 향하게.
   function faceMapCenter(){
-    const yw=Math.atan2(px, pz-1), pt=-.04;          // 정면 벡터 = (-sin yaw, -cos yaw)
+    const yw=Math.atan2(px, pz-1), pt=0;             // 정면 벡터 = (-sin yaw, -cos yaw) · 시작은 수평 정면
     if(isLocked()){ yawBase=yw; pitchBase=pt; mx=my=rawMx=rawMy=0; }
     else { yawBase=yw+rawMx*FOLLOW; pitchBase=pt+rawMy*1.1; mx=rawMx; my=rawMy; }
     yaw=yw; pitch=pt; camera.rotation.set(pitch,yaw,0);
+    holdView(yw,pt);
   }
   function pickPlayerSpawn(){
     //  살아 있는 발명이에게서 가장 멀리 떨어진 곳을 고른다 (부활 직후 다굴 방지)
@@ -7340,14 +8448,20 @@
         const s=Math.sign(mx), v=(Math.abs(mx)-EDGE)/(1-EDGE);
         yawBase-=s*v*EDGE_SPD*dt;
       }
+      if(VIEW_HOLD){ if(performance.now()<VIEW_HOLD.until) applyHold(); else VIEW_HOLD=null; }
       yaw=yawBase-mx*FOLLOW;
       pitch=Math.max(-1.3,Math.min(1.3,pitchBase-my*1.1));
       camera.rotation.set(pitch,yaw,0);
     }
 
+    if(PARK.water && PARK.group.visible){ const o=PARK.water.material.map.offset; o.x=(o.x+dt*.012)%1; o.y=(o.y+dt*.007)%1; }
+    document.body.classList.toggle('nocursor', gameState==='playing'||gameState==='countdown');
+    if(gameState==='playing' && isPark()){ parkStep(dt); }
+    if(gameState==='playing' && isTutorial()){ tutTick(dt); }
     if(gameState==='playing'){
       // 타이머 — 협동에서는 호스트가 세고, 게스트는 받은 값을 표시만 한다
-      if(isGuest()){
+      if(isTraining()){ /* 공원 · 튜토리얼: 시간 · 웨이브 없음 */ }
+      else if(isGuest()){
         $('timer').textContent=Math.max(0,Math.floor(timeLeft/60))+':'+String(Math.max(0,timeLeft%60)).padStart(2,'0');
       } else {
         timeAcc+=dt;
@@ -7359,8 +8473,7 @@
       }
       if(gameState!=='playing') return;
       // 웨이브 진행 (시간 기준)
-      checkWaveClear();
-      tickSpawner(dt);
+      if(!isTraining()){ checkWaveClear(); tickSpawner(dt); }
       // 연속 처치 유지 시간
       if(comboN>0){
         comboT-=dt;
@@ -7467,6 +8580,8 @@
 
     // 아이템 픽업
     pickups.forEach(p=>{
+      if(isPark()) return;
+      if(isTutorial() && !p.active) return;      // 튜토리얼: 아이템은 대본이 놓아 준다
       if(!p.active){
         if(isGuest()) return;                  // 재생성은 호스트가 정한다
         p.respawnT-=dt;
@@ -7585,7 +8700,7 @@
       const spin=g.userData.spin;              // 프로펠러 등 상시 회전 부품
       if(spin) spin.forEach(o=>o.rotation.y+=dt*14);
       let moving=false;
-      if(gameState==='playing') moving=e.isBoss? bossBrain(e,dt) : e.isAgent? agentBrain(e,dt) : npcBrain(e,dt);
+      if(gameState==='playing') moving=e.dummy? false : e.isBoss? bossBrain(e,dt) : e.isAgent? agentBrain(e,dt) : npcBrain(e,dt);
       animEntity(e,dt,moving);
     });
 
