@@ -85,6 +85,10 @@
 
   /* ── 아이템 획득 순간의 색 효과 (빨강=회복 / 주황=공격력 / 파랑=이속) ── */
   #itemFx { position:fixed; inset:0; pointer-events:none; z-index:9; opacity:0; }
+  #glLost { position:fixed; left:50%; top:22px; transform:translateX(-50%); z-index:70;
+    font-size:14px; font-weight:700; color:#fff; background:rgba(150,30,30,.92);
+    border:1px solid rgba(255,255,255,.35); border-radius:8px; padding:10px 18px;
+    box-shadow:0 6px 20px rgba(0,0,0,.5); pointer-events:none; white-space:nowrap; }
 
   /* ── F1을 누르고 있는 동안만 보이는 조작법 오버레이 ── */
   #keyOverlay { position:fixed; inset:0; z-index:55; display:flex; align-items:center; justify-content:center;
@@ -1081,6 +1085,7 @@
 <div id="vig"></div>
 <div id="shieldFx"></div>
 <div id="itemFx"></div>
+<div id="glLost" class="hidden">그래픽이 잠시 끊겼습니다 · 복구되지 않으면 새로고침(F5) 해 주세요</div>
 
 <!-- F1을 누르고 있는 동안만 보이는 조작법 오버레이 (게임은 계속 진행) -->
 <div id="keyOverlay" class="hidden">
@@ -3017,8 +3022,13 @@
   const lerpN=(a,b,k)=>a+(b-a)*k;
   const lerpHex=(target,a,b,k)=>target.copy(_ca.setHex(a)).lerp(_cb.setHex(b),k);
   const clamp01=v=>Math.max(0,Math.min(1,v));
+  //  NaN 한 개가 씬 전체를 단색으로 죽여 버리므로, 값이 들어오는 길목마다 이걸로 막는다
+  const fin=v=>typeof v==='number' && isFinite(v);
   let dayT=0, dayApplied=-1, lampWarm=false;
   function applyDaylight(t, force){
+    //  t 가 NaN 이면 아래 조기반환 비교(Math.abs(NaN-x)<e)가 언제나 false 라
+    //  배경·안개·모든 광원에 매 프레임 NaN 을 다시 발라 화면이 영구히 죽는다. 입구에서 막는다.
+    if(!fin(t)) return;
     t=clamp01(t);
     if(!force && Math.abs(t-dayApplied)<.0012) return;           // 약 0.2초마다 한 번만 갱신
     dayApplied=t;
@@ -3073,8 +3083,13 @@
   //  판 진행률 — 호스트/싱글은 1초 미만 누적값까지 더해 매끄럽게, 게스트는 받은 초를 부드럽게 따라간다
   function tickDaylight(dt){
     if(dayHold!=null) return;
+    if(!fin(timeLeft)) timeLeft=0;                 // 네트워크로 들어온 값이 깨졌을 때
+    if(!fin(timeAcc))  timeAcc=0;
     const target=clamp01((MATCH_TIME-timeLeft+(isGuest()? 0 : timeAcc))/MATCH_TIME);
-    dayT= isGuest()? dayT+(target-dayT)*Math.min(1,dt*1.5) : target;
+    if(!fin(target)) return;
+    if(!fin(dayT)) dayT=target;                    // 이미 NaN 이 되었더라도 스스로 되돌아온다
+    const next= isGuest()? dayT+(target-dayT)*Math.min(1,dt*1.5) : target;
+    dayT= fin(next)? next : target;
     applyDaylight(dayT);
   }
   applyDaylight(0,true);
@@ -5648,7 +5663,10 @@
   //  게스트: 호스트가 보낸 몬스터 목록대로 씬을 맞춘다
   function applyWorld(d){
     if(NET.isHost) return;
-    wave=d.wv; waveKills=d.wk; timeLeft=d.tl; score=d.sc;
+    //  패킷에 값이 빠지면 timeLeft 가 undefined 가 되고, 그 한 프레임이 낮/밤 진행도를
+    //  NaN 으로 만들어 화면이 통째로 죽는다. 깨진 값은 직전 값을 유지한다.
+    wave=fin(d.wv)? d.wv : wave;  waveKills=fin(d.wk)? d.wk : waveKills;
+    timeLeft=fin(d.tl)? d.tl : timeLeft;  score=fin(d.sc)? d.sc : score;
     $('scoreN').textContent=score.toLocaleString();
     //  강화 진행도 — 처치 알림을 놓쳤어도 주기 동기화로 맞춘다
     if(d.uc!=null) syncUpgrade(d.uc, d.lv);
@@ -6832,6 +6850,21 @@
     try{ keyboardLock(false); }catch(e){}
     try{ if(inBattle()) pauseGame(); }catch(e){}
   }
+  //  그래픽 컨텍스트가 날아가면 지금까지는 화면만 죽은 채로 게임이 계속 돌아 혼란스러웠다.
+  //  이제는 잠금을 풀고 멈춘 뒤 알리고, 복구되면 장면을 다시 칠한다.
+  (function bindGL(){
+    const el=renderer.domElement, note=$('glLost');
+    el.addEventListener('webglcontextlost', e=>{
+      e.preventDefault();                       // 복구 가능한 분실로 처리
+      try{ cursorRescue(); }catch(err){}
+      if(note) note.classList.remove('hidden');
+    }, false);
+    el.addEventListener('webglcontextrestored', ()=>{
+      if(note) note.classList.add('hidden');
+      if(!fin(dayT)) dayT=0;
+      dayApplied=-1; try{ applyDaylight(dayT, true); }catch(err){}
+    }, false);
+  })();
   addEventListener('error', cursorRescue);
   addEventListener('unhandledrejection', cursorRescue);
   addEventListener('pagehide', cursorRescue);
@@ -8747,6 +8780,26 @@
     }
     flash.intensity=Math.max(0,flash.intensity-dt*9);
 
+    //  ── 마지막 안전망 ──
+    //   어떤 경로로든 카메라나 배경에 NaN 이 들어가면 화면 전체가 디테일 없는 단색(흰색/검정)이 된다.
+    //   원인을 못 잡아도 증상은 남지 않도록, 그리기 직전에 확인하고 마지막 정상값으로 되돌린다.
+    {
+      const cp=camera.position, cr=camera.rotation;
+      if(!fin(cp.x)||!fin(cp.y)||!fin(cp.z)||!fin(cr.x)||!fin(cr.y)||!fin(cr.z)){
+        if(!fin(px)) px=0; if(!fin(py)) py=0; if(!fin(pz)) pz=0; if(!fin(vy)) vy=0;
+        if(!fin(eyeH)) eyeH=1.62;
+        if(!fin(yawBase)) yawBase=0; if(!fin(pitchBase)) pitchBase=0;
+        if(!fin(mx)) mx=0; if(!fin(my)) my=0;
+        yaw=yawBase; pitch=pitchBase;
+        camera.position.set(px, py+eyeH, pz); camera.rotation.set(pitch,yaw,0);
+      }
+      const bg=scene.background;
+      if((bg && (!fin(bg.r)||!fin(bg.g)||!fin(bg.b))) ||
+         (scene.fog && (!fin(scene.fog.near)||!fin(scene.fog.far)||!fin(scene.fog.color.r)))){
+        if(!fin(dayT)) dayT=0;
+        dayApplied=-1; applyDaylight(dayT, true);
+      }
+    }
     if(gameState==='menu'){ updateMenuStage(dt); renderer.render(menuScene,menuCam); }
     else renderer.render(scene,camera);
   }
