@@ -1516,10 +1516,12 @@
   //   관절(몸통 · 머리 · 팔 · 다리 · 무기 등 움직이는 마디) 하나에 붙은 끝 조각들을 색을 정점에 담아 한 메시로 합친다.
   //   피격 점멸 재질(flashMat) · 반투명(발밑 링 · 발광) · 자식이 있는 조각은 그대로 둔다.
   const BAKE_MATS=new Map();
+  const SHARED_MATS=new WeakSet();
   function bakeMat(src){
     const k=src.type+'|'+(src.map?src.map.uuid:'')+'|'+(src.emissive? src.emissive.getHexString()+src.emissiveIntensity : '')+'|'+(src.shininess||'')+'|'+src.side;
     if(BAKE_MATS.has(k)) return BAKE_MATS.get(k);
     const m=src.clone(); m.color=new THREE.Color(0xffffff); m.vertexColors=true;
+    SHARED_MATS.add(m);                            // 여러 캐릭터가 함께 쓰는 재질 — disposeParts 가 해제하지 않는다
     BAKE_MATS.set(k,m); return m;
   }
   function bakeParts(g){
@@ -2930,13 +2932,15 @@
     window.__park={trees:trees.length, inner, coll:PARK.coll.length};
   }
 
-  //  월드 전환 — 보이는 것 · 충돌 · 미니맵을 한 번에 바꾼다
+  //  월드 전환 — 보이는 것 · 충돌 · 사다리 · 미니맵을 한 번에 바꾼다
+  const ARENA_LADDERS=ladders.slice();           // 공원에는 사다리가 없다 — 전장 사다리가 보이지 않게 남아 허공을 오르던 문제
   function setWorld(mode){
     const park = mode==='park';
     if(park) buildPark();
     arenaGroup.visible=!park;
     if(PARK.group) PARK.group.visible=park;
     colliders.length=0; (park? PARK.coll : ARENA_COLL).forEach(c=>colliders.push(c));
+    ladders.length=0; if(!park) ARENA_LADDERS.forEach(l=>ladders.push(l));
     MM.cv=null; MM.bg=null;                       // 미니맵 배경은 다음 그리기 때 새 콜라이더로 다시 만든다
   }
 
@@ -3218,10 +3222,12 @@
   for(let i=0;i<2;i++) mkPickup('bomb');  // 특허 폭탄 — 슬롯에 보관했다 사용
 
   // ═════════ 이름표 (이름 + 목숨 + 체력바) ═════════
+  //  이름표처럼 개체마다 따로 만든 텍스처 — disposeParts 가 함께 해제한다 (공용 텍스처는 넣지 않는다)
+  const OWNED_TEX=new WeakSet();
   function makeLabel(name,colorCss){
     const cv=document.createElement('canvas'); cv.width=256; cv.height=64;
     const ctx=cv.getContext('2d');
-    const tex=new THREE.CanvasTexture(cv);
+    const tex=new THREE.CanvasTexture(cv); OWNED_TEX.add(tex);
     const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthWrite:false}));
     sp.scale.set(2.4,.6,1);
     let label=name;                       // 매치마다 이름이 바뀔 수 있으므로 변수로 보관
@@ -3248,7 +3254,7 @@
     const W=256, H=72;
     const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
     const ctx=cv.getContext('2d');
-    const tex=new THREE.CanvasTexture(cv);
+    const tex=new THREE.CanvasTexture(cv); OWNED_TEX.add(tex);
     const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthWrite:false}));
     sp.scale.set(2.4, 2.4*H/W, 1);
     let label=name;
@@ -3521,7 +3527,10 @@
   function disposeParts(o){
     o.traverse(x=>{
       if(x.isMesh && x.geometry && !RB_SHARED.has(x.geometry) && !SOFT_SET.has(x.geometry)) x.geometry.dispose();
-      const m=x.material; if(m && m.dispose) m.dispose();
+      const m=x.material;
+      if(m && m.map && OWNED_TEX.has(m.map)){ m.map.dispose(); OWNED_TEX.delete(m.map); }   // material.dispose() 는 map 을 해제하지 않는다
+      //  공용(캐시된) 재질은 살아 있는 다른 몬스터도 쓰고 있다 — 해제하면 다음 프레임에 다시 컴파일되며 끊긴다
+      if(m && m.dispose && !SHARED_MATS.has(m)) m.dispose();
     });
   }
   //  그룹의 파츠를 통째로 갈아 끼운다. 이름표 스프라이트만 남겨 두므로
@@ -3802,9 +3811,11 @@
     shadows(g); trimShadows(g); if(typeof bakeParts==='function') bakeParts(g);
     return g;
   }
-  function makeBalmyeongi(team){
+  //  skin 을 처음부터 넘기면 기본 외형(0)을 만들었다가 곧바로 버리는 이중 생성을 피한다
+  //  (뒤이어 같은 값으로 applyNpcSkin 을 불러도 '같은 외형'이라 바로 돌아온다)
+  function makeBalmyeongi(team, skin){
     const g=new THREE.Group();
-    applyNpcSkin(g, 0, team);
+    applyNpcSkin(g, skin||0, team);
     g.scale.setScalar(.95);            // e.baseScale 로 잡히는 값 — 외형을 바꿔도 유지된다
     return g;
   }
@@ -4022,6 +4033,8 @@
       // 대장 광폭화
       enrage(){ tone({type:'sawtooth', f0:420, f1:110, dur:.7, vol:.3, filter:'lowpass', fc:1600});
                 burstN({dur:.6, fc0:2200, fc1:120, vol:.22}); },
+      // 버튼 · 슬라이더 조작음 (감도 조절 · 그만하고 결과 보기 등에서 부른다)
+      click(){ tone({type:'triangle', f0:1100, dur:.05, vol:.14}); },
       // 카운트다운 / 시작
       tick(){ tone({type:'square', f0:880, dur:.1, vol:.24}); },
       go(){ tone({type:'square', f0:1320, dur:.35, vol:.3});
@@ -4055,7 +4068,7 @@
     const battle=new Audio(); battle.preload='auto'; battle.loop=true;   // 고른 곡을 그 판 내내 반복
     const result=new Audio(); result.preload='auto'; result.loop=true;
     const menu=new Audio('bgm/'+BGM_MENU); menu.preload='auto'; menu.loop=true;
-    const amb=new Audio(); amb.preload='auto'; amb.loop=true; let ambFile='', ambOn=false;   // 공원 · 튜토리얼
+    const amb=new Audio(); amb.preload='auto'; amb.loop=true; let ambFile='', ambOn=false, held=false;   // held: 일시정지로 멈춘 상태 — 입력이 있어도 다시 틀지 않는다   // 공원 · 튜토리얼
     const MENU_VOL=.38;
     let menuWanted=false, resultFile='';
     const missing=new Set();                     // 없는 파일은 한 번 실패하면 다시 시도하지 않는다
@@ -4094,10 +4107,10 @@
         active=true; tries=0;
         playBattle();
       },
-      pause(){ if(active) battle.pause(); if(ambOn) amb.pause(); },
-      resume(){ if(active){ battle.muted=SFX.isMuted(); safePlay(battle); } if(ambOn){ amb.muted=SFX.isMuted(); safePlay(amb); } },
+      pause(){ held=true; if(active) battle.pause(); if(ambOn) amb.pause(); },
+      resume(){ held=false; if(active){ battle.muted=SFX.isMuted(); safePlay(battle); } if(ambOn){ amb.muted=SFX.isMuted(); safePlay(amb); } },
       stop(){                                    // 전부 정지 (메뉴로 나가기 · 다시 도전)
-        clearFade(); active=false; menuWanted=false; ambOn=false;
+        clearFade(); active=false; menuWanted=false; ambOn=false; held=false;
         battle.pause(); result.pause(); menu.pause(); amb.pause();
         try{ menu.currentTime=0; battle.currentTime=0; }catch(e){}
         try{ result.currentTime=0; }catch(e){}
@@ -4131,12 +4144,12 @@
       scene(file){
         clearFade(); active=false; battle.pause(); result.pause(); menuWanted=false; menu.pause();
         if(missing.has(file)){ this.menu(); return; }
-        ambOn=true; if(ambFile!==file){ ambFile=file; amb.src='bgm/'+file; }
+        ambOn=true; held=false; if(ambFile!==file){ ambFile=file; amb.src='bgm/'+file; }
         amb.muted=SFX.isMuted(); amb.volume=MENU_VOL; try{ amb.currentTime=0; }catch(e){} safePlay(amb);
       },
       park(){ this.scene(BGM_PARK); },
       tutorial(){ this.scene(BGM_TUTORIAL); },
-      kick(){ if(menuWanted && menu.paused && !active) this.menu(); if(ambOn && amb.paused) { amb.muted=SFX.isMuted(); safePlay(amb); } },   // 브라우저가 첫 입력 전 재생을 막았을 때
+      kick(){ if(menuWanted && menu.paused && !active) this.menu(); if(ambOn && !held && amb.paused) { amb.muted=SFX.isMuted(); safePlay(amb); } },   // 브라우저가 첫 입력 전 재생을 막았을 때
       syncMute(){ battle.muted=result.muted=menu.muted=amb.muted=SFX.isMuted(); },
       //  상태 확인용 (현재 곡 이름)
       nowPlaying(){ return active&&cur>=0? BGM_BATTLE[cur] : ambOn&&!amb.paused? ambFile : (!result.paused && !result.error? resultFile : (!menu.paused? BGM_MENU : null)); }
@@ -4204,6 +4217,11 @@
     }
     return null;
   }
+  //  명중 수는 '발사 1번'당 한 번만 센다 — 산탄 3발이 모두 맞아도 발사는 1번이라 명중률이 100%를 넘던 문제
+  function countHit(opt){
+    if(opt && opt.shot){ if(opt.shot.hit) return; opt.shot.hit=true; }
+    stat.hits++;
+  }
   function burst(pos,team,attacker,src,opt){
     boom(pos,team);
     if(gameState!=='playing') return;
@@ -4234,7 +4252,7 @@
           relay({k:'dmg', id:ge.id, v:dmg});
         }
       }
-      if(landed) stat.hits++;
+      if(landed) countHit(opt);
       return;
     }
     if(team==='blue'){
@@ -4260,7 +4278,7 @@
           applyDamage(e,dmg,attacker,src);
         }
       });
-      if(attacker==='me' && landed) stat.hits++;
+      if(attacker==='me' && landed) countHit(opt);
     } else {
       //  머리(카메라) 기준 1.7m 구 + 몸통 원기둥. 구만 쓰면 발치에 맞은 탄이 새어 나간다.
       const onMe = playerAlive && (pos.distanceTo(camera.position)<1.7
@@ -4599,7 +4617,7 @@
       relay({k:'hit', id:e.netId, hp:Math.max(0,Math.round(e.hp))});
     if(attacker==='me'){ stat.dmgDealt+=Math.min(dmg, e.hp+dmg); }
     const fm=e.group.userData.flashMat;
-    if(fm){ const prev=fm.emissiveIntensity; fm.emissiveIntensity=1.0; setTimeout(()=>fm.emissiveIntensity=prev,120); }
+    hitFlash(fm);
     //  대장 광폭화 — 체력 45% 이하에서 한 번만
     if(e.isBoss && !e.enraged && e.hp>0 && e.hp<=e.maxHp*BOSS_RAGE){
       e.enraged=true; e.spdMul*=1.45; e.fireCd=Math.min(e.fireCd,.6); SFX.enrage();
@@ -4630,7 +4648,9 @@
         if(isCoop() && NET.isHost){
           //  처치 확정을 동료에게 알린다 (동료 입장에서 by 가 뒤집힌다).
           //  강화 진행도(uc)와 레벨(lv)도 함께 보내 동료의 링이 같은 순간에 차오르게 한다.
-          relay({k:'kill', id:e.netId, by: mine? 'host':'mate', b:e.isBoss?1:0, sc:score, log:logHtml, uc:upCnt, lv:wlv});
+          //  기록 문구는 HTML 이 아니라 값으로 보낸다 — 받는 쪽이 이스케이프해서 다시 만든다 (XSS 방지)
+          relay({k:'kill', id:e.netId, by: mine? 'host':'mate', b:e.isBoss?1:0, sc:score, log:logHtml, uc:upCnt, lv:wlv,
+                 nm:e.name, got, cn:(mine&&comboN>=2)? comboN:0, cm:comboMul});
         }
       }
       if(e.dummy) tutEvent('dummyDead', e);
@@ -4712,8 +4732,9 @@
   function spawnInventor(variantKey, atSpot, idx){
     if(isGuest()) return null;                 // 스폰은 호스트만 한다
     const V=VARIANTS[variantKey]||VARIANTS.normal;
-    const g=makeBalmyeongi(0xd63b3b);
-    applyNpcSkin(g, npcSkinFor(wave), 0xd63b3b);
+    const skin=npcSkinFor(wave);
+    const g=makeBalmyeongi(0xd63b3b, skin);
+    applyNpcSkin(g, skin, 0xd63b3b);
     let p=atSpot||pickSpawn(11, 26);
     if(atSpot && idx){                              // 같은 지점의 두 번째 마리는 옆으로 비켜 세운다
       const a=Math.random()*Math.PI*2;
@@ -4732,7 +4753,7 @@
   function spawnBoss(key){
     if(isGuest()) return null;
     const B=BOSSES[key];
-    const g=makeBalmyeongi(0xd63b3b);
+    const g=makeBalmyeongi(B.accent||0xd63b3b, B.skin);
     applyNpcSkin(g, B.skin, B.accent||0xd63b3b);   // 몸통 발광 패널 = 체력바 앞의 점과 같은 색
     const p=pickSpawn(16, 28);
     const e=addEntity(g, B.name, 'red', B.hp, p[0], p[1], false);
@@ -4818,9 +4839,16 @@
     if(wave>=WAVES.length){ winMatch(); return; }       // 최종 웨이브 완수 → 3분 전이라도 승리
     nextWave();
   }
-  //  모든 웨이브 완수 — 남은 시간 1초당 100점 보너스를 얹고 끝낸다
+  //  모든 웨이브 완수 — 남은 시간 1초당 CLEAR_BONUS_PER_SEC 점을 얹고 끝낸다.
+  //  이 값은 '대장을 남겨 두고 잔몹을 잡으며 버티기(파밍)'로 1초에 벌 수 있는 최대 점수보다 커야 한다.
+  //  그래야 어떤 경우에도 빨리 끝내는 쪽이 이득이고, 완수한 판이 파밍한 판보다 반드시 높다.
+  //    파밍 상한 ≈ (스폰 4마리/1.7초 × 최고 250점 + 소환 대장 2마리/약 5초 × 150점) × 연속 처치 최대 2.5배 ≈ 1,600점/초
+  //  웨이브 · 변종 점수 · 스폰 간격 · STREAK_MAX 를 올리면 이 값도 다시 계산해 맞춰야 한다.
+  const CLEAR_BONUS_PER_SEC = 2000;
   function winMatch(){
-    clearBonus=Math.max(0,timeLeft)*100;
+    //  timeLeft 는 초 단위 정수라 소수점 아래(아직 다 흐르지 않은 1초)까지 반영한다 — 1초 미만 차이에서도 빨리 끝낸 쪽이 높게
+    const remain=Math.max(0, timeLeft - timeAcc);
+    clearBonus=Math.round(remain*CLEAR_BONUS_PER_SEC);
     if(clearBonus){ score+=clearBonus; $('scoreN').textContent=score.toLocaleString(); }
     endMatch(false, true);
   }
@@ -5025,6 +5053,7 @@
     let n=3;
     showCd('3'); SFX.unlock(); SFX.tick();
     cdTimer=setInterval(()=>{
+      if(gameState==='paused') return;             // 카운트다운 중 일시정지 — 재개할 때까지 숫자를 멈춘다
       n--;
       if(n>0){ showCd(String(n)); SFX.tick(); }
       else if(n===0){
@@ -5251,24 +5280,40 @@
   }
   function netConnect(onReady, onFail){
     if(NET.ws && NET.connected){ onReady&&onReady(); return; }
-    try{ NET.ws=new WebSocket(netUrl()); }
-    catch(e){ onFail&&onFail('서버에 연결할 수 없습니다.'); return; }
-    let settled=false;
-    const failTimer=setTimeout(()=>{ if(!settled){ settled=true; onFail&&onFail('서버 응답이 없습니다.'); } }, 6000);
-    NET.ws.onopen=()=>{
-      NET.connected=true; settled=true; clearTimeout(failTimer);
+    //  콜백은 '가장 최근에 연결을 부른 화면' 것만 쓴다 — 로비를 두 번 열어도 옛 화면의 실패 문구가 새 화면을 덮지 않는다
+    NET.onReady=onReady||null; NET.onFail=onFail||null;
+    //  시간 초과는 알리기만 하고 소켓은 끊지 않는다. 잠든 무료 서버는 깨어나는 데 6초 넘게 걸릴 수 있고,
+    //  늦게라도 열리면 그때 onReady 로 이어진다 (호출하는 쪽이 아직 그 화면인지 스스로 확인한다).
+    clearTimeout(NET.failTimer);
+    NET.failTimer=setTimeout(()=>{
+      if(NET.connected) return;
+      const f=NET.onFail; NET.onFail=null; f&&f('서버 응답이 없습니다.');
+    }, 6000);
+    //  이미 연결 중인 소켓이 있으면 새로 만들지 않고 그 소켓을 기다린다 (소켓이 두 개 생기지 않게)
+    if(NET.ws && NET.ws.readyState===0) return;
+    let ws;
+    try{ ws=NET.ws=new WebSocket(netUrl()); }
+    catch(e){ clearTimeout(NET.failTimer); NET.onReady=NET.onFail=null; onFail&&onFail('서버에 연결할 수 없습니다.'); return; }
+    let opened=false;
+    ws.onopen=()=>{
+      if(NET.ws!==ws) return;
+      opened=true; NET.connected=true; clearTimeout(NET.failTimer);
       //  무료 호스팅은 HTTP 요청이 15분 없으면 잠든다 — 연결돼 있는 동안 5분마다 가볍게 깨워 둔다
       if(!NET.keep) NET.keep=setInterval(()=>{ if(NET.connected) fetch(API_BASE+'/api/ping').catch(()=>{}); }, 5*60*1000);
       netSend({t:'hello', name:playerName, char:LOADOUTS[charIdx].name});
-      onReady&&onReady();
+      const f=NET.onReady; NET.onReady=NET.onFail=null; f&&f();
     };
-    NET.ws.onclose=()=>{
+    ws.onclose=()=>{
+      if(NET.ws!==ws) return;
       NET.connected=false;
-      if(!settled){ settled=true; clearTimeout(failTimer); onFail&&onFail('서버와 연결이 끊겼습니다.'); }
+      if(!opened){
+        clearTimeout(NET.failTimer);
+        const f=NET.onFail; NET.onReady=NET.onFail=null; f&&f('서버와 연결이 끊겼습니다.');
+      }
       else { if(isPark()){ parkOnline=false; parkClearPeers(); chatLine('서버와 연결이 끊겼습니다. 혼자 있는 공원입니다.','sys'); parkCount(); } onPeerGone(true); }
     };
-    NET.ws.onerror=()=>{};
-    NET.ws.onmessage=ev=>{ let m; try{ m=JSON.parse(ev.data); }catch(e){ return; } netHandle(m); };
+    ws.onerror=()=>{};
+    ws.onmessage=ev=>{ if(NET.ws!==ws) return; let m; try{ m=JSON.parse(ev.data); }catch(e){ return; } netHandle(m); };
   }
   function netSend(o){ if(NET.ws && NET.ws.readyState===1) NET.ws.send(JSON.stringify(o)); }
   const relay=d=>netSend({t:'r', d});
@@ -5308,7 +5353,9 @@
     if(nowHost) NET.isHost=true;
     if(inMatch && !wasGuest && isCoop()){
       //  방장: 참여자가 나가도 월드는 내 쪽에 있으니 혼자 이어 간다
-      battleLog('<span class="hl">'+esc(who)+'</span> 님이 나갔습니다. 혼자 이어서 진행합니다.','out');
+      //  끊긴 쪽이 나일 수도 있다 — 서버 연결이 끊긴 경우엔 동료가 나갔다고 하지 않는다
+      const goneMsg = disconnected? '서버와 연결이 끊겼습니다' : '<span class="hl">'+esc(who)+'</span> 님이 나갔습니다';
+      battleLog(goneMsg+'. 혼자 이어서 진행합니다.','out');
       NET.mode='solo';
       $('mateBox').classList.add('hidden');
       if(NET.mateObj){ NET.mateObj.visible=false; }
@@ -5316,8 +5363,11 @@
       if(gameState==='paused' && pausedBy==='mate'){
         pausedBy='me';
         $('pResume').classList.remove('hidden');
-        $('pauseMsg').textContent=who+' 님이 나갔습니다. 돌아가기를 누르면 혼자 이어서 진행합니다.';
+        $('pauseMsg').textContent=(disconnected? '서버와 연결이 끊겼습니다' : who+' 님이 나갔습니다')+'. 돌아가기를 누르면 혼자 이어서 진행합니다.';
       }
+      //  내 목숨이 이미 바닥났다면 혼자 남은 판은 더 이어갈 수 없다 — 바로 끝낸다
+      //  (멈춰 있는 중이면 resumeGame 에서 다시 확인한다)
+      checkAllOut();
     } else if(!inMatch && !scrRoom.classList.contains('hidden')){
       refreshRoomScreen();
     } else if(!inMatch && NET.room && !scrGuide.classList.contains('hidden')){
@@ -5335,7 +5385,8 @@
     lobbyMsg('서버에 연결하는 중…');
     $('roomGrid').innerHTML='';
     netConnect(
-      ()=>{ netSend({t:'hello', name:playerName, char:LOADOUTS[charIdx].name});   // 공원에서 이미 연결돼 있었으면 이름·캐릭터를 갱신
+      ()=>{ if(scrLobby.classList.contains('hidden')) return;   // 늦게 연결됐는데 이미 로비를 떠났다면 아무것도 하지 않는다
+            netSend({t:'hello', name:playerName, char:LOADOUTS[charIdx].name});   // 공원에서 이미 연결돼 있었으면 이름·캐릭터를 갱신
             lobbyMsg('방을 선택하세요.'); netSend({t:'lobby'}); },
       msg=>{ lobbyMsg(msg+' 멀티 플레이는 서버가 필요합니다.', true); }
     );
@@ -5551,9 +5602,17 @@
   function ghostHit(ge){
     if(!ge || !ge.alive) return;
     ge.hitT=.18;
-    const fm=ge.g.userData.flashMat;
-    if(fm){ const prev=fm.emissiveIntensity; fm.emissiveIntensity=1.0;
-            setTimeout(()=>fm.emissiveIntensity=prev,120); }
+    hitFlash(ge.g.userData.flashMat);
+  }
+  //  피격 섬광 — 0.12초 안에 여러 번 맞아도 '맞기 전' 밝기로 돌아가게 한다.
+  //  (예전에는 두 번째 타격이 이미 밝아진 1.0 을 원래 값으로 저장해 몸이 계속 빛났다)
+  function hitFlash(fm){
+    if(!fm) return;
+    const u=fm.userData;
+    if(u.flashT) clearTimeout(u.flashT);
+    else u.flashBase=fm.emissiveIntensity;
+    fm.emissiveIntensity=1.0;
+    u.flashT=setTimeout(()=>{ fm.emissiveIntensity=u.flashBase; u.flashT=0; }, 120);
   }
   function onRelay(d){
     if(!d) return;
@@ -5605,16 +5664,24 @@
       if(ge){ const c=ge.g.position.clone(); c.y+=1; boom(c,'blue',!d.b); SFX.die(c, !!d.b); }
       if(d.by==='mate'){ SFX.kill(); hitmark(true); bumpCombo(); stat.kills++; if(d.b) stat.bosses++; else stat.inventors++; }
       score=d.sc; $('scoreN').textContent=score.toLocaleString();
-      battleLog(d.log, 'kill');
-      syncUpgrade(d.uc, d.lv);                            // 강화 링을 방장과 같은 순간에 채운다
+      //  방장이 보낸 HTML(d.log)은 그대로 넣지 않는다 — 값만 받아 이스케이프해서 다시 만든다 (XSS 방지)
+      if(d.nm!=null){
+        const who=d.by==='mate'? nameSpan(ME) : '<span class="hl">'+esc((NET.peer&&NET.peer.name)||'동료')+'</span>';
+        const cn=(+d.cn)|0, cm=+d.cm;
+        battleLog(who+' 이(가) <span class="npc">'+esc(d.nm)+'</span> 처치 <span class="hl">+'+esc((+d.got||0).toLocaleString())+'</span>'
+                  +(cn>=2 && Number.isFinite(cm)? ' <span class="streak">'+cn+'연속 ×'+cm.toFixed(1)+'</span>':''), 'kill');
+      } else {
+        battleLog(esc(String(d.log==null?'':d.log).replace(/<[^>]*>/g,'')), 'kill');   // 이전 버전 방장 — 태그를 걷어낸 글자만
+      }
+      syncUpgrade(d.uc, d.lv);                           // 강화 링을 방장과 같은 순간에 채운다
       return;
     }
     if(d.k==='wave'){                                     // 게스트: 웨이브 전환
       if(NET.isHost) return;
-      wave=d.n; waveKills=0; if(wave>stat.maxWave) stat.maxWave=wave;
+      wave=Math.max(1,(+d.n)|0); waveKills=0; if(wave>stat.maxWave) stat.maxWave=wave;
       setWaveHUD();
-      showWaveBanner(wave, d.name, !!d.boss);
-      battleLog('웨이브 <span class="hl">'+wave+'</span> — <span class="npc">'+d.name+'</span>','wave');
+      showWaveBanner(wave, String(d.name==null?'':d.name), !!d.boss);
+      battleLog('웨이브 <span class="hl">'+wave+'</span> — <span class="npc">'+esc(d.name)+'</span>','wave');
       if(d.boss) SFX.boss(); else SFX.wave();
       return;
     }
@@ -5652,9 +5719,20 @@
       }
       return;
     }
+    //  등록 실패는 'rank' 와 다른 종류로 보낸다 — 예전 버전 참여자는 모르는 종류를 그냥 무시한다
+    //  ('rank' 에 fail 을 실어 보내면 예전 버전은 rank 값이 없는 채로 순위를 그리다 오류가 난다)
+    if(d.k==='rankfail'){
+      if(NET.isHost) return;
+      NET.lastRank={fail:true};
+      if(gameState==='over') $('resRank').textContent='방장 쪽에서 팀 기록을 등록하지 못했습니다.';
+      return;
+    }
     if(d.k==='rank'){                                     // 게스트: 방장이 등록한 팀 순위
       if(NET.isHost) return;
-      NET.lastRank={rank:d.rank, total:d.total};
+      //  상대가 보낸 값은 숫자로만 받는다 (문자열이면 showRank 의 innerHTML 로 그대로 들어간다)
+      const rank=Math.max(0,(+d.rank)|0), total=Math.max(0,(+d.total)|0);
+      if(!rank) return;
+      NET.lastRank={rank, total};
       if(gameState==='over') showRank(NET.lastRank);
       return;
     }
@@ -5678,9 +5756,10 @@
       seen.add(id);
       let ge=mateEnts.get(id);
       if(!ge){
-        const g=makeBalmyeongi(0xd63b3b);
         //  대장은 방장 화면과 같은 강조색을 써야 체력바의 점과 이어진다
-        applyNpcSkin(g, skin, (boss && BOSSES[bkey] && BOSSES[bkey].accent) || 0xd63b3b);
+        const tint=(boss && BOSSES[bkey] && BOSSES[bkey].accent) || 0xd63b3b;
+        const g=makeBalmyeongi(tint, skin);
+        applyNpcSkin(g, skin, tint);
         g.scale.setScalar(0.95*sizeMul);
         //  머리 위 이름표 + 체력바 — 호스트 화면과 똑같이 달아 준다.
         //  이게 없으면 게스트 쪽에서는 발명이 피가 닳는 게 전혀 보이지 않는다.
@@ -5824,8 +5903,17 @@
     //  협동 기록은 팀 한 줄이어야 하므로 방장만 등록한다.
     //  게스트는 방장이 받은 순위를 relay({k:'rank'}) 로 전달받아 표시한다.
     if(NET.matchRole==='guest'){
-      if(NET.lastRank) showRank(NET.lastRank);
-      else el.textContent='방장이 팀 기록을 등록하는 중…';
+      if(NET.lastRank && NET.lastRank.fail) el.textContent='방장 쪽에서 팀 기록을 등록하지 못했습니다.';
+      else if(NET.lastRank) showRank(NET.lastRank);
+      else {
+        el.textContent='방장이 팀 기록을 등록하는 중…';
+        //  방장이 먼저 나갔거나 등록에 실패하면 순위가 오지 않는다 — 끝없이 기다리게 두지 않는다
+        const waitSeq=matchSeq;
+        setTimeout(()=>{
+          if(matchSeq===waitSeq && !NET.lastRank && gameState==='over')
+            el.textContent='방장에게서 순위를 받지 못했습니다. 랭킹 화면에서 확인해 주세요.';
+        }, 15000);
+      }
       return;
     }
     const coopRec = NET.matchMode==='coop';
@@ -5842,9 +5930,10 @@
         showRank(res);
         if(coopRec) relay({k:'rank', rank:res.rank, total:res.total});
       }
-      else el.textContent='기록이 저장되었습니다.';
+      else { el.textContent='기록이 저장되었습니다.'; if(coopRec) relay({k:'rankfail'}); }
     }catch(err){
       el.textContent='랭킹 서버에 연결하지 못했습니다 (기록은 이 기기에 저장됨)';
+      if(coopRec) relay({k:'rankfail'});           // 참여자가 순위를 끝없이 기다리지 않게 알린다
     }
   }
   //  팀 이름은 항상 '방장 & 참여자' 순서 — 두 사람 화면과 랭킹 목록이 같은 순서로 보인다
@@ -6057,7 +6146,13 @@
     relay({k:'guide'});                        // 참여자도 가이드로
     openCoopGuide();
   };
-  $('btnRankBack').onclick=()=>{ if(gameState==='over'){ goMenu(); } else { BGM.menu(); show(scr0); } };
+  $('btnRankBack').onclick=()=>{
+    if(gameState==='over'){
+      //  결과 → 랭킹 → 뒤로: 홈 버튼과 똑같이 방을 비우고 나간다 (안 그러면 서버의 방이 계속 찬 채로 남는다)
+      if(NET.room){ netSend({t:'leave'}); NET.room=0; NET.peer=null; }
+      NET.mode='solo'; goMenu();
+    } else { BGM.menu(); show(scr0); }
+  };
   $('btnRankReload').onclick=()=>renderRanks();
   $('btnReroll').onclick=()=>{
     $('nickInput').value=randomName();
@@ -6102,10 +6197,12 @@
   //  · 게임 종료는 방장만 — 참여자 화면에는 종료 버튼이 없다
   //  by==='mate' 는 상대가 보낸 신호로 멈춘 경우다.
   let pausedBy='me';
+  let pausedFrom='playing';                        // 카운트다운 중에 멈췄으면 재개 후에도 카운트다운으로 돌아간다
   function pauseGame(by){
     if(gameState!=='playing' && gameState!=='countdown') return;
     const fromMate = by==='mate';
     pausedBy = fromMate? 'mate' : 'me';
+    pausedFrom = gameState;
     gameState='paused';
     clearInterval(fireTimer); fireTimer=null;
     if(isPark()) chatShow(false);
@@ -6138,11 +6235,13 @@
     if(isCoop() && !fromMate) relay({k:'resume'});
     scrPause.classList.add('hidden');
     document.body.classList.remove('paused');
-    gameState='playing';
+    gameState = pausedFrom==='countdown'? 'countdown' : 'playing';
+    pausedFrom='playing';
     BGM.resume();
     rebaseView();                                  // 커서를 옮긴 만큼 시점이 튀지 않게 기준 재설정
     requestLock();
     refreshLockHint();
+    checkAllOut();                                 // 멈춘 사이 동료가 나갔고 내 목숨도 없다면 여기서 판을 끝낸다
   }
   //  일시정지 → 나가기: 바로 메인으로 가지 않고, 멈춘 시점까지의 결과를 보여준다
   function quitToResult(){
@@ -6151,6 +6250,8 @@
     endMatch(true);
   }
   function togglePause(){
+    //  튜토리얼 종료 화면이 떠 있는 동안은 ESC 로 게임에 돌아가지 않는다 — 화면의 버튼으로만 나간다
+    if(!$('scrTutEnd').classList.contains('hidden')) return;
     //  ESC 를 한 번 더 누르면 그대로 재개한다.
     //  (예전에는 안내 문구만 바꾸고 아무 일도 하지 않아, 두 번 누르면 빠져나올 수 없었다)
     if(gameState==='paused') resumeGame();
@@ -6175,7 +6276,7 @@
   //  머리 위 이름표 — 체력바 없이 이름만
   function makeNameLabel(name){
     const W=256, H=56, cv=document.createElement('canvas'); cv.width=W; cv.height=H;
-    const ctx=cv.getContext('2d'), tex=new THREE.CanvasTexture(cv);
+    const ctx=cv.getContext('2d'), tex=new THREE.CanvasTexture(cv); OWNED_TEX.add(tex);
     const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthWrite:false}));
     sp.scale.set(2.2, 2.2*H/W, 1);
     const rr=(x,y,w,h,r)=>{ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); };
@@ -6299,7 +6400,8 @@
     requestLock(); refreshLockHint();
     BGM.park();
     chatLine('자유 공원에 들어왔습니다. <b>Enter</b> 로 이야기하고, <b>F</b> 로 손짓해 보세요.','sys');
-    netConnect(()=>{ netSend({t:'park', name:playerName, char:LOADOUTS[charIdx].name}); },
+    netConnect(()=>{ if(!isPark()) return;           // 늦게 연결됐는데 이미 공원을 나갔다면 입장하지 않는다
+                     netSend({t:'park', name:playerName, char:LOADOUTS[charIdx].name}); },
                ()=>{ chatLine('서버에 연결하지 못했습니다. 혼자 있는 공원입니다.','sys'); parkCount(); });
   }
   function exitPark(){
@@ -6613,6 +6715,7 @@
 
   // ── 진입 / 퇴장 ────────────────────────────────────────────────────────
   function enterTutorial(){
+    if(NET.room) netSend({t:'leave'});             // 방에 남아 있었다면 서버에도 알리고 나온다
     MODE='tutorial'; NET.mode='solo'; NET.room=0; NET.peer=null; NET.matchMode='tutorial';
     clearInterval(cdTimer); cdTimer=null;
     BGM.stop();
@@ -6754,6 +6857,9 @@
       mx=my=rawMx=rawMy=0;
     } else {
       lockLostAt=performance.now();
+      //  공원 채팅 중 ESC: 브라우저가 잠금부터 풀어 버리므로 여기서 받는다 — 채팅만 닫고 일시정지 메뉴는 열지 않는다
+      //  (다시 클릭하면 잠금이 걸린다)
+      if(isPark() && chatOpen()){ chatShow(false); refreshLockHint(); return; }
       if(inBattle()){ pauseGame(); lockPauseAt=performance.now(); }   // ESC 등으로 잠금이 풀리면 곧바로 일시정지
     }
     refreshLockHint();
@@ -6815,9 +6921,10 @@
       const dir=aim.clone().sub(from);
       const len=dir.length()||1;
       const side=new THREE.Vector3(-dir.z,0,dir.x).normalize().multiplyScalar(len*.055);
-      fire(from, aim.clone(), 'blue','me', null, {mul:POWER_MID, radius:POWER_RADIUS});
-      fire(from, aim.clone().add(side), 'blue','me', null, {mul:1, radius:POWER_RADIUS*.8});
-      fire(from, aim.clone().sub(side), 'blue','me', null, {mul:1, radius:POWER_RADIUS*.8});
+      const shot={hit:false};                    // 세 발이 한 번의 발사를 공유한다 (명중 집계용)
+      fire(from, aim.clone(), 'blue','me', null, {mul:POWER_MID, radius:POWER_RADIUS, shot});
+      fire(from, aim.clone().add(side), 'blue','me', null, {mul:1, radius:POWER_RADIUS*.8, shot});
+      fire(from, aim.clone().sub(side), 'blue','me', null, {mul:1, radius:POWER_RADIUS*.8, shot});
       SFX.shotPower();
     } else {
       fire(from, aim, 'blue','me');
@@ -6898,7 +7005,11 @@
   document.addEventListener('fullscreenchange', ()=>keyboardLock(!!document.fullscreenElement));
 
   const keys={};
+  //  글자를 입력하는 칸(닉네임 · 채팅 등)에 쓰는 중이면 게임 단축키로 가로채지 않는다 (ESC 만 예외)
+  const isTypingField=t=>!!t && (t.isContentEditable || t.tagName==='TEXTAREA' ||
+    (t.tagName==='INPUT' && !['range','checkbox','radio','button','submit','reset','color','file'].includes((t.type||'').toLowerCase())));
   addEventListener('keydown',e=>{
+    if(e.code!=='Escape' && isTypingField(e.target)) return;
     if(e.code==='KeyM' && !e.repeat){ toggleMute(); return; }
     if(e.code==='F1'){ e.preventDefault(); showKeyHelp(); return; }   // 누르고 있는 동안만
     //  ESC = 토글. 단, 브라우저가 잠금을 풀면서 이미 멈춘 그 '한 번의 누름'이
@@ -7064,7 +7175,29 @@
     // 카메라 전방 벡터 (수평 성분)
     const fx=-Math.sin(yaw), fz=-Math.cos(yaw);
     let hitAny=false;
-    aliveReds().forEach(e=>{
+    //  게스트: 몬스터는 방장 쪽에 있으므로 내 화면의 몬스터로 판정하고 피해만 보고한다 (탄환 · 폭탄과 같은 방식)
+    if(isGuest()){
+      for(const [,ge] of mateEnts){
+        if(!ge.alive) continue;
+        const q=ge.g.position;
+        const ex=q.x-px, ez=q.z-pz;
+        const d=Math.hypot(ex,ez);
+        if(d>MELEE_RANGE || d<0.01) continue;
+        if(Math.abs(q.y-py)>1.8) continue;
+        if((ex/d)*fx+(ez/d)*fz < MELEE_ARC) continue;
+        const c=q.clone(); c.y+=1;
+        const v=Math.round(dmg);
+        hitmark(false);
+        spawnDmg(c.x, c.y+.6, c.z, v, false);
+        stat.dmgDealt+=v;
+        ghostHit(ge);
+        ghostPredict(ge, v);
+        relay({k:'dmg', id:ge.id, v});
+        boom(c, 'blue', true);
+        hitAny=true;
+      }
+    }
+    else aliveReds().forEach(e=>{
       const ex=e.group.position.x-px, ez=e.group.position.z-pz;
       const d=Math.hypot(ex,ez);
       if(d>MELEE_RANGE || d<0.01) return;
@@ -7113,12 +7246,14 @@
   }
   function pickPlayerSpawn(){
     //  살아 있는 발명이에게서 가장 멀리 떨어진 곳을 고른다 (부활 직후 다굴 방지)
-    const alive=entities.filter(e=>e.alive);
+    //  참여자 쪽에는 entities 에 적이 없다 — 방장이 보내 준 몬스터(mateEnts) 위치로 판단한다
+    const alive=isGuest()? [...mateEnts.values()].filter(ge=>ge.alive).map(ge=>ge.g.position)
+                         : entities.filter(e=>e.alive).map(e=>e.group.position);
     let best=PLAYER_SPAWNS[0], bestD=-1;
     const shuffled=PLAYER_SPAWNS.slice().sort(()=>Math.random()-.5);
     for(const p of shuffled){
       let near=Infinity;
-      for(const e of alive) near=Math.min(near, Math.hypot(e.group.position.x-p[0], e.group.position.z-p[1]));
+      for(const q of alive) near=Math.min(near, Math.hypot(q.x-p[0], q.z-p[1]));
       if(near===Infinity) return freePlayerSpot(p);      // 적이 없으면 아무 곳이나
       if(near>bestD){ bestD=near; best=p; }
       if(near>16) return freePlayerSpot(p);              // 충분히 멀면 즉시 채택
